@@ -3,7 +3,7 @@
 	"package": "jump_reset_tracker.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
-		"LocalPlayerMixin",
+		"LivingEntityMixin",
 		"MultiPlayerGameModeMixin",
 		"GuiMixin"
 	],

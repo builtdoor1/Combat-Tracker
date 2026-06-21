@@ -26,10 +26,18 @@ public class JumpResetTrackerClient implements ClientModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     /**
-     * Pre-physics vertical velocity captured by {@code LocalPlayerMixin} at the
-     * HEAD of {@code move()}; read by the tracker in END_CLIENT_TICK.
+     * Set by {@code LivingEntityMixin} to {@code System.nanoTime()} when the local
+     * player actually jumps ({@code jumpFromGround}). Read and cleared by the
+     * tracker each tick via {@link #consumeJumpNano()}. 0 means "no jump".
      */
-    public static volatile double preMoveVelocityY = 0.0;
+    public static volatile long jumpNano = 0L;
+
+    /** Returns the pending jump nano-timestamp (or 0) and clears it. */
+    public static long consumeJumpNano() {
+        long v = jumpNano;
+        jumpNano = 0L;
+        return v;
+    }
 
     private final JumpResetTracker tracker = new JumpResetTracker();
     private KeyMapping toggleHudKey;

@@ -3,6 +3,7 @@ package jump_reset_tracker.detection;
 import jump_reset_tracker.JumpResetTrackerClient;
 import jump_reset_tracker.config.JrtConfig;
 import jump_reset_tracker.config.TimingWindow;
+import jump_reset_tracker.record.SessionRecorder;
 import jump_reset_tracker.stats.StatsTracker;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -11,30 +12,28 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 
 /**
- * Core jump-reset detection, reworked from sombreror/JumpReset-mod.
+ * Core jump-reset detection.
  *
  * <p>Run once per client tick. Each tick:
  * <ol>
- *   <li><b>Jump</b> is detected by the vertical-velocity impulse (delta-vy) using
- *       the pre-move sample captured by {@link jump_reset_tracker.mixin.LocalPlayerMixin}
- *       — not by an {@code onGround} flip, so it fires even on the same tick a hit lands.</li>
- *   <li><b>Hit</b> is detected fully client-side: {@code hurtTime} goes 0→+ while the
- *       invulnerability (regen) timer is active <em>and</em> horizontal knockback exceeds a
- *       threshold — which filters fall / fire / poison damage (no horizontal push).</li>
+ *   <li><b>Jump</b> is detected from the real {@code jumpFromGround()} call (via
+ *       {@link jump_reset_tracker.mixin.LivingEntityMixin}) — NOT from upward
+ *       velocity, so knockback (e.g. a crit while standing still) can never be
+ *       mistaken for a jump.</li>
+ *   <li><b>Hit</b> is detected client-side: {@code hurtTime} goes 0→+ while the
+ *       invulnerability (regen) timer is active <em>and</em> horizontal knockback
+ *       exceeds a threshold (filters fall / fire / poison).</li>
  *   <li>Hit and jump are paired through a short tick window. Timing uses
  *       {@link System#nanoTime()} with one-way ping compensation.</li>
  * </ol>
  *
- * <p>Only attempts where the player actually jumped are recorded. A hit with no
- * following jump (an expired window) is not counted.</p>
+ * <p>Only attempts where the player actually jumped are recorded.</p>
  */
 public class JumpResetTracker {
     /** A jump within this many ticks BEFORE a hit is classified "too early". */
     private static final int JUMP_LOOKBACK_TICKS = 2;
     /** Per-result cooldown so one exchange can't spam multiple results. */
     private static final int RESULT_COOLDOWN_TICKS = 4;
-    /** Minimum pre-move vy for a delta to count as a jump (filters tiny bumps). */
-    private static final double JUMP_MIN_VY = 0.10;
 
     private enum State { IDLE, WINDOW_ACTIVE }
 
@@ -55,7 +54,6 @@ public class JumpResetTracker {
     // Per-tick carry-overs
     private int prevHurtTime = 0;
     private boolean prevOnGround = true;
-    private double prevVelocityY = 0.0;
 
     public void tick(Minecraft client) {
         currentTick++;
@@ -70,7 +68,6 @@ public class JumpResetTracker {
         long tickNano = System.nanoTime();
 
         // ── Sample this tick's state ──────────────────────────────────────────
-        double preMoveVy = JumpResetTrackerClient.preMoveVelocityY;
         double vx = player.getDeltaMovement().x;
         double vz = player.getDeltaMovement().z;
         double horizMag = Math.sqrt(vx * vx + vz * vz);
@@ -79,13 +76,12 @@ public class JumpResetTracker {
         int invulnTime = player.invulnerableTime;
         double ping = measurePing(client);
 
-        // ── Jump detection (delta-vy impulse) ─────────────────────────────────
-        boolean jumpNow = (preMoveVy - prevVelocityY) >= cfg.jumpDeltaThreshold
-                && preMoveVy >= JUMP_MIN_VY
-                && !onGround;
+        // ── Jump detection (real jumpFromGround call) ─────────────────────────
+        long jumpSignalNano = JumpResetTrackerClient.consumeJumpNano();
+        boolean jumpNow = jumpSignalNano != 0L;
         if (jumpNow) {
             lastJumpTick = currentTick;
-            lastJumpNano = tickNano;
+            lastJumpNano = jumpSignalNano;
         }
 
         // ── Hit detection (hurtTime + regen + horizontal knockback) ───────────
@@ -114,7 +110,6 @@ public class JumpResetTracker {
 
         prevHurtTime = hurtTime;
         prevOnGround = onGround;
-        prevVelocityY = preMoveVy;
     }
 
     private void handleHit(JrtConfig cfg, long tickNano, double ping) {
@@ -130,7 +125,7 @@ public class JumpResetTracker {
             return;
         }
 
-        // SAME-TICK: jump and hit on the same tick → simultaneous (0 ms).
+        // SAME-TICK: a real jump and the hit on the same tick → 0 ms.
         if (currentTick == lastJumpTick && readyForResult()) {
             registerAttempt(0.0, ping);
             state = State.IDLE;
@@ -164,7 +159,7 @@ public class JumpResetTracker {
 
         StatsTracker stats = StatsTracker.get();
         stats.record(delta, success);
-        jump_reset_tracker.record.SessionRecorder.get().recordJump(delta, result.name());
+        SessionRecorder.get().recordJump(delta, result.name());
 
         String hudText;
         int color;
@@ -214,7 +209,6 @@ public class JumpResetTracker {
         state = State.IDLE;
         prevHurtTime = 0;
         prevOnGround = true;
-        prevVelocityY = 0.0;
         lastJumpTick = Integer.MIN_VALUE / 2;
         lastJumpNano = 0L;
     }

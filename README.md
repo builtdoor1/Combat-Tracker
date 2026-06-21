@@ -27,7 +27,7 @@ Two things it proves about *you*:
 Everything is client-side and observational.
 
 ### Jump resets
-- **Jump** is detected from the vertical-velocity **impulse** (delta-vy), sampled *before* physics by a mixin — so it fires even on the exact tick a hit lands.
+- **Jump** is detected from the real `jumpFromGround()` call via a mixin — so knockback (e.g. a crit while standing still) can never be mistaken for a jump.
 - **Hit** is detected when `hurtTime` goes 0→positive while the regen timer is active **and** horizontal knockback exceeds a threshold (which filters fall/fire/poison).
 - A hit opens a short tick window; the next jump in it is scored. Timing uses `System.nanoTime()` with one-way **ping compensation**. The signed delta is classed **HIT** (inside the success window), **MISS – too late**, or **MISS – too early**.
 
@@ -105,7 +105,6 @@ Each session embeds a **SHA-256 hash** and an **HMAC-SHA256 signature** over the
 
 | Key | Default | Meaning |
 |-----|---------|---------|
-| `jumpDeltaThreshold` | `0.25` | Min upward velocity impulse to register a jump. |
 | `knockbackThreshold` | `0.065` | Min horizontal speed after damage to count it as a combat hit. |
 | `windowTicksGround` / `windowTicksAir` | `6` / `10` | Ticks after a hit during which a jump still counts. |
 | `pingCompFactor` | `0.5` | Fraction of round-trip ping treated as one-way latency. `0` disables. |
