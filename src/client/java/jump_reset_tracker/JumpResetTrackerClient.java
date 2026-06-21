@@ -32,6 +32,13 @@ public class JumpResetTrackerClient implements ClientModInitializer {
      */
     public static volatile long jumpNano = 0L;
 
+    /**
+     * Set by {@code LivingEntityMixin} to {@code System.nanoTime()} when the local
+     * player registers a hit ({@code handleDamageEvent}). Gives a precise hit time
+     * instead of one quantized to the end of the tick. 0 means "none yet".
+     */
+    public static volatile long hitNano = 0L;
+
     /** Returns the pending jump nano-timestamp (or 0) and clears it. */
     public static long consumeJumpNano() {
         long v = jumpNano;

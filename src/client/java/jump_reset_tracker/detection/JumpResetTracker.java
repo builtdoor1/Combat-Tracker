@@ -102,7 +102,7 @@ public class JumpResetTracker {
         }
 
         // ── Score a jump that lands inside an open window ─────────────────────
-        if (jumpNow && state == State.WINDOW_ACTIVE) {
+        if (jumpNow && state == State.WINDOW_ACTIVE && readyForResult()) {
             double ms = (lastJumpNano - hitNano) / 1_000_000.0;
             registerAttempt(ms, ping);
             state = State.IDLE;
@@ -113,21 +113,16 @@ public class JumpResetTracker {
     }
 
     private void handleHit(JrtConfig cfg, long tickNano, double ping) {
-        double oneWayMs = ping * cfg.pingCompFactor;
-        long compHitNano = tickNano - (long) (oneWayMs * 1_000_000.0);
+        // Use the precise hit time from the mixin; fall back to the tick time.
+        long base = JumpResetTrackerClient.hitNano != 0L ? JumpResetTrackerClient.hitNano : tickNano;
+        long compHitNano = base - (long) (ping * cfg.pingCompFactor * 1_000_000.0);
 
         int ticksSinceJump = currentTick - lastJumpTick;
 
-        // PRE-HIT JUMP: jumped 1–2 ticks before the hit registered → too early.
-        if (ticksSinceJump > 0 && ticksSinceJump <= JUMP_LOOKBACK_TICKS && readyForResult()) {
+        // A real jump on this tick (same-tick reset) or 1–2 ticks before the hit:
+        // pair them and use the actual signed sub-tick delta (jump − hit).
+        if (ticksSinceJump >= 0 && ticksSinceJump <= JUMP_LOOKBACK_TICKS && readyForResult()) {
             registerAttempt((lastJumpNano - compHitNano) / 1_000_000.0, ping);
-            state = State.IDLE;
-            return;
-        }
-
-        // SAME-TICK: a real jump and the hit on the same tick → 0 ms.
-        if (currentTick == lastJumpTick && readyForResult()) {
-            registerAttempt(0.0, ping);
             state = State.IDLE;
             return;
         }

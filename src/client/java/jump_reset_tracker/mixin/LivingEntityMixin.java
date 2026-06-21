@@ -2,6 +2,7 @@ package jump_reset_tracker.mixin;
 
 import jump_reset_tracker.JumpResetTrackerClient;
 import net.minecraft.client.Minecraft;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -9,11 +10,15 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Detects a genuine jump by hooking {@link LivingEntity#jumpFromGround()} — the
- * exact method the game calls when the player jumps. This is far more reliable
- * than inferring a jump from upward velocity, which cannot be distinguished from
- * the upward component of knockback (a crit while standing still would otherwise
- * look like a perfect 0 ms jump reset).
+ * Captures precise client-side timestamps for the local player:
+ * <ul>
+ *   <li>{@code jumpFromGround()} — the exact moment of a real jump (not inferable
+ *       from velocity, which knockback also changes).</li>
+ *   <li>{@code handleDamageEvent(...)} — the exact moment the client registers a
+ *       hit, so the hit time isn't quantized to the end of the tick.</li>
+ * </ul>
+ * Both feed nanosecond timestamps to {@link JumpResetTrackerClient}, letting the
+ * tracker compute a real sub-tick delta instead of collapsing same-tick resets to 0 ms.
  */
 @Mixin(LivingEntity.class)
 public class LivingEntityMixin {
@@ -22,6 +27,13 @@ public class LivingEntityMixin {
     private void jumpResetTracker$onJump(CallbackInfo ci) {
         if ((Object) this == Minecraft.getInstance().player) {
             JumpResetTrackerClient.jumpNano = System.nanoTime();
+        }
+    }
+
+    @Inject(method = "handleDamageEvent(Lnet/minecraft/world/damagesource/DamageSource;)V", at = @At("HEAD"))
+    private void jumpResetTracker$onDamageEvent(DamageSource source, CallbackInfo ci) {
+        if ((Object) this == Minecraft.getInstance().player) {
+            JumpResetTrackerClient.hitNano = System.nanoTime();
         }
     }
 }
