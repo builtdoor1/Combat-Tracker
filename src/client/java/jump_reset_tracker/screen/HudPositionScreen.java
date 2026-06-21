@@ -32,7 +32,6 @@ public class HudPositionScreen extends Screen {
     protected void init() {
         addRenderableWidget(Button.builder(Component.literal("Done"), b -> this.onClose())
                 .bounds(this.width / 2 - 100, this.height - 28, 200, 20).build());
-        // Keep the stored position valid for the current screen size.
         config.hudX = clampX(config.hudX);
         config.hudY = clampY(config.hudY);
     }
@@ -44,10 +43,9 @@ public class HudPositionScreen extends Screen {
         String hint = "Drag the overlay to reposition it, then click Done";
         graphics.drawString(this.font, hint, this.width / 2 - this.font.width(hint) / 2, 24, 0xFFFFFFFF);
 
-        int x = config.hudX;
-        int y = config.hudY;
-        HudRenderer.renderAt(graphics, x, y);
-        graphics.renderOutline(x - 1, y - 1, HudRenderer.boxWidth(), HudRenderer.boxHeight(),
+        HudRenderer.renderScaledAt(graphics, config.hudX, config.hudY);
+        graphics.renderOutline(config.hudX - 1, config.hudY - 1,
+                HudRenderer.scaledWidth() + 2, HudRenderer.scaledHeight() + 2,
                 dragging ? 0xFFFFFF55 : 0xFF55FF55);
     }
 
@@ -82,19 +80,19 @@ public class HudPositionScreen extends Screen {
     }
 
     private boolean insideBox(double mx, double my) {
-        int x = config.hudX - 1;
-        int y = config.hudY - 1;
-        int w = HudRenderer.boxWidth();
-        int h = HudRenderer.boxHeight();
+        int x = config.hudX;
+        int y = config.hudY;
+        int w = HudRenderer.scaledWidth();
+        int h = HudRenderer.scaledHeight();
         return mx >= x && mx <= x + w && my >= y && my <= y + h;
     }
 
     private int clampX(int x) {
-        return Math.max(1, Math.min(x, this.width - HudRenderer.boxWidth()));
+        return Math.max(1, Math.min(x, this.width - HudRenderer.scaledWidth()));
     }
 
     private int clampY(int y) {
-        return Math.max(1, Math.min(y, this.height - HudRenderer.boxHeight()));
+        return Math.max(1, Math.min(y, this.height - HudRenderer.scaledHeight()));
     }
 
     @Override

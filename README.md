@@ -1,120 +1,117 @@
 # Combat Tracker
 
-A **client-side** [Fabric](https://fabricmc.net/) mod for **Minecraft 1.21.11** that detects and records **jump-reset** timing in PvP.
+A **client-side** [Fabric](https://fabricmc.net/) mod for **Minecraft 1.21.11** that measures and records your PvP timing — both **jump resets** and **combo cadence** — and presents it as anti-cheat evidence. By *builtdoor*.
 
-A *jump reset* is jumping at the exact moment another player hits you, which partially cancels the incoming knockback. Combat Tracker is **purely observational** — it never modifies movement, knockback, or any other game mechanic. It only measures *when* you jumped relative to *when* you were hit, and keeps statistics.
+Combat Tracker is **purely observational**: it never modifies movement, knockback, attack timing, or any other game mechanic. It only watches what already happens and keeps statistics.
 
-Because it records the full distribution of your timings (including standard deviation), it doubles as evidence that your jump resets come from human reflexes: a human shows natural spread, while an auto-reset cheat shows near-zero variance.
+Two things it proves about *you*:
+
+- **Jump resets** are human, not an auto-reset cheat — a human shows natural timing spread (standard deviation); a bot is near-constant.
+- **Combos** are human, not a triggerbot — a triggerbot swings on a near-constant interval (low *jitter*); a human's clicks vary.
 
 ---
 
 ## Installation
 
-1. Install [Fabric Loader](https://fabricmc.net/use/installer/) (0.19.3 or newer).
-2. Put the following in your `.minecraft/mods` folder:
-   - `combat-tracker-1.21.11.jar` — from the [latest release](../../releases/latest)
+1. Install [Fabric Loader](https://fabricmc.net/use/installer/) (0.19.3+).
+2. Put these in your `.minecraft/mods` folder:
+   - `combat-tracker-<version>+1.21.11.jar` — from the [latest release](../../releases/latest)
    - [Fabric API](https://modrinth.com/mod/fabric-api) (`0.141.4+1.21.11`)
-   - *(optional)* [Mod Menu](https://modrinth.com/mod/modmenu) — needed only for the in-game config screen
+   - *(optional)* [Mod Menu](https://modrinth.com/mod/modmenu) — for the in-game config screen
 3. Launch Minecraft.
 
 ---
 
-## How it works
+## How detection works
 
-Detection is fully client-side and observational:
+Everything is client-side and observational.
 
-- **Jump** (Event B): a mixin samples the player's upward velocity *before* physics runs each tick, and a jump is detected from the velocity **impulse** (delta-vy) — not from an `onGround` flip. This fires reliably even on the exact tick a hit lands.
-- **Hit** (Event A): the mod watches `hurtTime` go from 0 to positive while the damage invulnerability (regen) timer is active **and** horizontal knockback exceeds a threshold. The knockback check filters out fall, fire and poison damage (which have no horizontal push) without needing any packet inspection.
-- **Pairing & timing**: a hit opens a short **tick window**; the next jump inside it is scored. Timing uses `System.nanoTime()` with **one-way ping compensation**, so the delta approximates true server-side timing.
+### Jump resets
+- **Jump** is detected from the vertical-velocity **impulse** (delta-vy), sampled *before* physics by a mixin — so it fires even on the exact tick a hit lands.
+- **Hit** is detected when `hurtTime` goes 0→positive while the regen timer is active **and** horizontal knockback exceeds a threshold (which filters fall/fire/poison).
+- A hit opens a short tick window; the next jump in it is scored. Timing uses `System.nanoTime()` with one-way **ping compensation**. The signed delta is classed **HIT** (inside the success window), **MISS – too late**, or **MISS – too early**.
 
-The signed **delta** (`jumpTime − hitTime`, in ms) is then classified:
+### Combos (triggerbot signal)
+- A **combo** is a chain of **≥2 sprint hits** on the *same* player, with no self-damage in between and no gap longer than `maxComboGapMs`.
+- Each outgoing hit is detected via the attack method (a landed left-click on a player); only hits made while **sprinting** count.
+- The mod records the **interval** between consecutive hits, then reports the **average interval** and the **jitter** (standard deviation of those intervals).
+- **Low jitter ≈ triggerbot** (machine-constant cadence); **high jitter ≈ human**.
 
-| Delta | Result |
-|-------|--------|
-| Between LOWER and UPPER | ✅ **HIT** |
-| Greater than UPPER | ❌ **MISS** (too late) |
-| Less than LOWER (jumped before the hit) | ❌ **MISS** (too early) |
-
-A hit with **no** following jump (the window simply expires) is *not* counted — only real attempts are recorded.
-
-> Detection method adapted from the open-source [sombreror/JumpReset-mod](https://github.com/sombreror/JumpReset-mod).
+> Jump-reset detection is adapted from the open-source [sombreror/JumpReset-mod](https://github.com/sombreror/JumpReset-mod).
 
 ---
 
 ## The HUD
 
-A small overlay (top-left by default) shows:
+Toggle with **`J`** (rebindable under *Options → Controls*). Drag to reposition via the config screen → **Move HUD…**. A red `● REC` line appears while a session is recording.
+
+**Detailed layout** shows:
 
 | Line | Meaning |
 |------|---------|
-| **Hits** | Number of successful jump resets |
-| **Misses** | Number of failed attempts |
-| **Rate** | Success percentage |
-| **Avg / SD** | Average delta and standard deviation (ms) across all attempts |
-| **Last** | Result of your most recent attempt |
+| Jump: X hit / Y miss | Jump-reset hits and misses |
+| Rate / Avg / SD | Success rate, average delta, standard deviation (ms) |
+| Combo … jitter ±… | Average combo interval and its jitter (ms) |
+| Combos / Last JR | Number of combos, and your last jump-reset result |
 
-- **Toggle the HUD:** press **`J`** (rebindable under *Options → Controls → Miscellaneous*).
-- **Move the HUD:** open the config screen → **Move HUD…** → drag the overlay anywhere on screen → **Done**.
+**Compact layout** condenses this to two lines.
+
+### Customizing the HUD
+All in the config screen:
+
+| Control | Default | Effect |
+|---------|---------|--------|
+| **HUD scale** | `1.00x` | Shrinks/enlarges the whole overlay (0.5–2.0). |
+| **BG opacity** | `56%` | Background box transparency (0 = no box). |
+| **Layout** | Detailed | Toggle Detailed ↔ Compact. |
+| **Theme** | Yellow | Accent color (Yellow / Aqua / Green / Pink / Orange / White). |
+| **Move HUD…** | — | Drag the overlay anywhere on screen. |
 
 ---
 
 ## Chat messages
 
-When **Chat messages** is enabled, every *attempt* prints a single line:
-
-- `[Combat Tracker] Jump reset HIT! (+42ms)` — green
-- `[Combat Tracker] Jump reset MISS - too late (+120ms)` — red
-- `[Combat Tracker] Jump reset MISS - too early (-30ms)` — red
-
-Ordinary jumps (not near a hit) never produce a message.
+When **Chat** is enabled, each jump-reset *attempt* prints one line (green HIT / red MISS). Ordinary jumps and ordinary hits never spam chat.
 
 ---
 
-## Configuration
+## Recording sessions & reports
 
-Open **Mod Menu → Combat Tracker → Config**. Everything is saved to `config/jump_reset_tracker/config.json`.
+Use **Start Recording** in the config screen (or bind the *Start/Stop Recording* key under Controls). While recording, every jump-reset attempt and every combo interval is captured with a timestamp. **Stop Recording** writes two files to `config/jump_reset_tracker/recordings/` and prints the path to chat:
 
-| Option | Default | What it does |
-|--------|---------|--------------|
-| **Success window LOWER** | `0 ms` | Lower edge of the success window. A delta below this is classed *too early*. |
-| **Success window UPPER** | `80 ms` | Upper edge of the success window. A delta above this is classed *too late*. An attempt is a **HIT** only when the delta is between LOWER and UPPER. |
-| **HUD** | `ON` | Show or hide the on-screen overlay (same as pressing **`J`**). |
-| **Chat messages** | `ON` | Whether each attempt prints a HIT/MISS line in chat. |
-| **Move HUD…** | — | Opens a screen where you drag the HUD to any position. |
-| **Reset Stats** | — | Clears all recorded attempts and statistics. **Click twice** to confirm. |
+- `session-<timestamp>.html` — a self-contained report you open in any browser: start/end **time signatures**, summary cards, and **SVG charts** (jump-reset delta over time, combo interval over time) with hover tooltips.
+- `session-<timestamp>.json` — the canonical data plus the integrity block.
 
-> The success-window sliders range from **0–600 ms**, and must satisfy `LOWER ≤ UPPER` (clamped automatically when you close the config screen).
+Use **Open recordings folder** in the config screen to jump straight there.
 
-### Advanced detection tuning
+### Integrity (read this honestly)
+Each session embeds a **SHA-256 hash** and an **HMAC-SHA256 signature** over the exact recorded data, plus start/end timestamps. Editing the file breaks the hash, so **casual tampering is detectable**.
 
-These live in `config.json` (no GUI) and rarely need changing:
-
-| Key | Default | What it does |
-|-----|---------|--------------|
-| `jumpDeltaThreshold` | `0.25` | Minimum upward velocity impulse to register a jump. |
-| `knockbackThreshold` | `0.065` | Minimum horizontal speed after damage to treat it as a real combat hit. |
-| `windowTicksGround` | `6` | Ticks after a grounded hit during which a jump still counts as an attempt. |
-| `windowTicksAir` | `10` | Ticks after an airborne hit during which a jump still counts. |
-| `pingCompFactor` | `0.5` | Fraction of round-trip ping treated as one-way latency for timing. Set `0` to disable ping compensation. |
+**It is not unforgeable.** The signing key ships inside this open-source mod, so anyone who recompiles it can fabricate "clean" data. Truly unforgeable evidence would require a trusted server or external video capture, which a client mod cannot provide. Treat a report as *tamper-evidence*, not proof against a determined cheater.
 
 ---
 
-## Clearing your stats
-
-Your stats live in `config/jump_reset_tracker/stats.json`. To wipe them:
-
-- **In-game:** config screen → **Reset Stats** → click again to confirm, **or**
-- **Manually:** delete `config/jump_reset_tracker/stats.json` while the game is closed.
-
----
-
-## File locations
+## Configuration files
 
 ```
 .minecraft/config/jump_reset_tracker/
-├── config.json   # timing window, HUD/chat toggles, HUD position
-└── stats.json    # full attempt history + computed aggregates
+├── config.json        # timing window, HUD options, detection tuning
+├── stats.json         # jump-reset history + aggregates
+├── combo_stats.json   # combo intervals + aggregates
+└── recordings/        # session .html reports + .json data
 ```
+
+### Advanced tuning (`config.json`, no GUI)
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `jumpDeltaThreshold` | `0.25` | Min upward velocity impulse to register a jump. |
+| `knockbackThreshold` | `0.065` | Min horizontal speed after damage to count it as a combat hit. |
+| `windowTicksGround` / `windowTicksAir` | `6` / `10` | Ticks after a hit during which a jump still counts. |
+| `pingCompFactor` | `0.5` | Fraction of round-trip ping treated as one-way latency. `0` disables. |
+| `maxComboGapMs` | `1500` | Max gap between sprint hits to stay one combo. |
+
+The success-window bounds (`lowerBoundMs` `0`, `upperBoundMs` `80`) are editable from the config screen sliders.
 
 ---
 
@@ -124,16 +121,10 @@ Your stats live in `config/jump_reset_tracker/stats.json`. To wipe them:
 ./gradlew build
 ```
 
-The remapped mod jar is written to `build/libs/combat-tracker-<modversion>+<mcversion>.jar`. Requires **JDK 21**.
-
----
-
-## A note on timing accuracy
-
-A hit is registered the tick the **client** applies its knockback — there is no purely client-side way to know another player hit you before the server reports it. To compensate, the hit timestamp is shifted back by your estimated one-way latency (`pingCompFactor × ping`), so the delta approximates true server-side timing rather than purely client-perceived timing. It still won't be frame-perfect, but it's consistent across attempts — which is exactly what makes the standard-deviation (variance) figure meaningful as a human-vs-bot signal.
+Output: `build/libs/combat-tracker-<modversion>+<mcversion>.jar`. Requires **JDK 21**.
 
 ---
 
 ## License
 
-[CC0-1.0](LICENSE) — public domain. Learn from it, copy it, do whatever you like.
+[CC0-1.0](LICENSE) — public domain.

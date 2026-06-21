@@ -5,7 +5,7 @@
 	"name": "Combat Tracker",
 	"description": "Client-side stat tracker that detects and records jump-reset timing in PvP. Purely observational - it never modifies game physics or mechanics.",
 	"authors": [
-		"Weilin"
+		"builtdoor"
 	],
 	"contact": {},
 	"license": "CC0-1.0",

@@ -1,3 +1,4 @@
 {
-	"key.jump_reset_tracker.toggle_hud": "Toggle Jump Reset HUD"
+	"key.jump_reset_tracker.toggle_hud": "Toggle Combat Tracker HUD",
+	"key.jump_reset_tracker.toggle_record": "Start/Stop Recording Session"
 }

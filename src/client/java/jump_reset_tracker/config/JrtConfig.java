@@ -27,6 +27,20 @@ public class JrtConfig {
     public int hudX = 4;
     public int hudY = 4;
 
+    // ── HUD appearance ────────────────────────────────────────────────────────
+    /** Overall HUD scale multiplier (0.5–2.0). */
+    public double hudScale = 1.0;
+    /** Background box opacity, 0–100%. */
+    public int hudBgOpacityPct = 56;
+    /** Compact single-block layout instead of the full multi-line panel. */
+    public boolean hudCompact = false;
+    /** Index into the HUD accent-color theme list. */
+    public int hudThemeIndex = 0;
+
+    // ── Combo detection tuning ────────────────────────────────────────────────
+    /** Max gap (ms) between sprint hits for them to remain one combo. */
+    public int maxComboGapMs = 1500;
+
     // ── Detection tuning (advanced; edit in config.json) ──────────────────────
     /** Minimum upward velocity impulse (delta-vy) for a tick to count as a jump. */
     public double jumpDeltaThreshold = 0.25;

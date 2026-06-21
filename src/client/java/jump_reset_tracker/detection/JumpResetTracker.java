@@ -164,6 +164,7 @@ public class JumpResetTracker {
 
         StatsTracker stats = StatsTracker.get();
         stats.record(delta, success);
+        jump_reset_tracker.record.SessionRecorder.get().recordJump(delta, result.name());
 
         String hudText;
         int color;
