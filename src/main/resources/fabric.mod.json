@@ -1,31 +1,27 @@
 {
 	"schemaVersion": 1,
-	"id": "combat-tracker",
+	"id": "jump_reset_tracker",
 	"version": "${version}",
-	"name": "Combat Tracker",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"name": "Jump Reset Tracker",
+	"description": "Client-side stat tracker that detects and records jump-reset timing in PvP. Purely observational - it never modifies game physics or mechanics.",
 	"authors": [
-		"Me!"
+		"Weilin"
 	],
-	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
-	},
+	"contact": {},
 	"license": "CC0-1.0",
-	"icon": "assets/combat-tracker/icon.png",
-	"environment": "*",
+	"icon": "assets/jump_reset_tracker/icon.png",
+	"environment": "client",
 	"entrypoints": {
-		"main": [
-			"combat_tracker.CombatTracker"
-		],
 		"client": [
-			"combat_tracker.client.CombatTrackerClient"
+			"jump_reset_tracker.JumpResetTrackerClient"
+		],
+		"modmenu": [
+			"jump_reset_tracker.integration.ModMenuIntegration"
 		]
 	},
 	"mixins": [
-		"combat-tracker.mixins.json",
 		{
-			"config": "combat-tracker.client.mixins.json",
+			"config": "jump_reset_tracker.client.mixins.json",
 			"environment": "client"
 		}
 	],
@@ -34,5 +30,8 @@
 		"minecraft": "~1.21.11",
 		"java": ">=21",
 		"fabric-api": "*"
+	},
+	"suggests": {
+		"modmenu": "*"
 	}
 }

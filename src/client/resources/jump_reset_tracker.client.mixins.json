@@ -1,0 +1,12 @@
+{
+	"required": true,
+	"package": "jump_reset_tracker.mixin",
+	"compatibilityLevel": "JAVA_21",
+	"client": [
+		"ClientPacketListenerMixin",
+		"GuiMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}
