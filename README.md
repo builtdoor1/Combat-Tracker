@@ -21,9 +21,13 @@ Because it records the full distribution of your timings (including standard dev
 
 ## How it works
 
-- **Hit** (Event A): the mod reads the client damage-event packet and only counts damage dealt by **another player** — mobs, fall damage, fire, etc. are ignored.
-- **Jump** (Event B): every client tick it checks whether you just left the ground while holding the jump key.
-- **Delta** = `jumpTime − hitTime`, in milliseconds. When a hit and a jump occur within the *outer window* of each other, it's recorded as an **attempt** and classified:
+Detection is fully client-side and observational:
+
+- **Jump** (Event B): a mixin samples the player's upward velocity *before* physics runs each tick, and a jump is detected from the velocity **impulse** (delta-vy) — not from an `onGround` flip. This fires reliably even on the exact tick a hit lands.
+- **Hit** (Event A): the mod watches `hurtTime` go from 0 to positive while the damage invulnerability (regen) timer is active **and** horizontal knockback exceeds a threshold. The knockback check filters out fall, fire and poison damage (which have no horizontal push) without needing any packet inspection.
+- **Pairing & timing**: a hit opens a short **tick window**; the next jump inside it is scored. Timing uses `System.nanoTime()` with **one-way ping compensation**, so the delta approximates true server-side timing.
+
+The signed **delta** (`jumpTime − hitTime`, in ms) is then classified:
 
 | Delta | Result |
 |-------|--------|
@@ -31,7 +35,9 @@ Because it records the full distribution of your timings (including standard dev
 | Greater than UPPER | ❌ **MISS** (too late) |
 | Less than LOWER (jumped before the hit) | ❌ **MISS** (too early) |
 
-All timing is measured on the client.
+A hit with **no** following jump (the window simply expires) is *not* counted — only real attempts are recorded.
+
+> Detection method adapted from the open-source [sombreror/JumpReset-mod](https://github.com/sombreror/JumpReset-mod).
 
 ---
 
@@ -72,13 +78,24 @@ Open **Mod Menu → Combat Tracker → Config**. Everything is saved to `config/
 |--------|---------|--------------|
 | **Success window LOWER** | `0 ms` | Lower edge of the success window. A delta below this is classed *too early*. |
 | **Success window UPPER** | `80 ms` | Upper edge of the success window. A delta above this is classed *too late*. An attempt is a **HIT** only when the delta is between LOWER and UPPER. |
-| **Outer attempt window** | `400 ms` | How close (in either direction) a hit and a jump must be to count as an *attempt* at all. Jumps further than this from any hit are ignored as unrelated, so casual jumping never affects your stats. |
 | **HUD** | `ON` | Show or hide the on-screen overlay (same as pressing **`J`**). |
 | **Chat messages** | `ON` | Whether each attempt prints a HIT/MISS line in chat. |
 | **Move HUD…** | — | Opens a screen where you drag the HUD to any position. |
 | **Reset Stats** | — | Clears all recorded attempts and statistics. **Click twice** to confirm. |
 
-> All sliders range from **0–600 ms**. The success window must satisfy `LOWER ≤ UPPER`; it is clamped automatically when you close the config screen.
+> The success-window sliders range from **0–600 ms**, and must satisfy `LOWER ≤ UPPER` (clamped automatically when you close the config screen).
+
+### Advanced detection tuning
+
+These live in `config.json` (no GUI) and rarely need changing:
+
+| Key | Default | What it does |
+|-----|---------|--------------|
+| `jumpDeltaThreshold` | `0.25` | Minimum upward velocity impulse to register a jump. |
+| `knockbackThreshold` | `0.065` | Minimum horizontal speed after damage to treat it as a real combat hit. |
+| `windowTicksGround` | `6` | Ticks after a grounded hit during which a jump still counts as an attempt. |
+| `windowTicksAir` | `10` | Ticks after an airborne hit during which a jump still counts. |
+| `pingCompFactor` | `0.5` | Fraction of round-trip ping treated as one-way latency for timing. Set `0` to disable ping compensation. |
 
 ---
 
@@ -107,13 +124,13 @@ Your stats live in `config/jump_reset_tracker/stats.json`. To wipe them:
 ./gradlew build
 ```
 
-The remapped mod jar is written to `build/libs/combat-tracker-<mc-version>.jar`. Requires **JDK 21**.
+The remapped mod jar is written to `build/libs/combat-tracker-<modversion>+<mcversion>.jar`. Requires **JDK 21**.
 
 ---
 
 ## A note on timing accuracy
 
-Hit timing is taken from when the **client receives** the damage packet — there is no purely client-side way to know another player hit you before the server reports it. So each delta reflects your reaction relative to *seeing* the hit, and includes your ping as a roughly constant offset. This is consistent across attempts and is exactly what makes the standard-deviation (variance) figure meaningful.
+A hit is registered the tick the **client** applies its knockback — there is no purely client-side way to know another player hit you before the server reports it. To compensate, the hit timestamp is shifted back by your estimated one-way latency (`pingCompFactor × ping`), so the delta approximates true server-side timing rather than purely client-perceived timing. It still won't be frame-perfect, but it's consistent across attempts — which is exactly what makes the standard-deviation (variance) figure meaningful as a human-vs-bot signal.
 
 ---
 

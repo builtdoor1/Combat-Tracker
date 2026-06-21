@@ -42,9 +42,6 @@ public class ConfigScreen extends Screen {
         y += gap;
         addRenderableWidget(new MsSlider(cx - w / 2, y, w, h, "Success window UPPER",
                 config.window.upperBoundMs, v -> config.window.upperBoundMs = v));
-        y += gap;
-        addRenderableWidget(new MsSlider(cx - w / 2, y, w, h, "Outer attempt window",
-                config.window.outerWindowMs, v -> config.window.outerWindowMs = v));
         y += gap + 8;
 
         addRenderableWidget(Button.builder(hudText(), b -> {

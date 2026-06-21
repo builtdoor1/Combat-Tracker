@@ -13,8 +13,6 @@ public class TimingWindow {
     public long lowerBoundMs = 0L;
     /** Upper edge of the success window. Default 80ms (user requested <= 80ms). */
     public long upperBoundMs = 80L;
-    /** Broad window around a hit in which a jump still counts as an attempt. */
-    public long outerWindowMs = 400L;
 
     public enum Result {
         SUCCESS,

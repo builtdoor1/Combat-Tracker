@@ -27,6 +27,19 @@ public class JrtConfig {
     public int hudX = 4;
     public int hudY = 4;
 
+    // ── Detection tuning (advanced; edit in config.json) ──────────────────────
+    /** Minimum upward velocity impulse (delta-vy) for a tick to count as a jump. */
+    public double jumpDeltaThreshold = 0.25;
+    /** Minimum horizontal speed just after damage to treat it as a real combat hit
+     *  (filters fall / fire / poison, which have no horizontal knockback). */
+    public double knockbackThreshold = 0.065;
+    /** Ticks after a grounded hit during which a jump still counts as an attempt. */
+    public int windowTicksGround = 6;
+    /** Ticks after an airborne hit during which a jump still counts as an attempt. */
+    public int windowTicksAir = 10;
+    /** Fraction of round-trip ping treated as one-way latency for hit-time compensation. */
+    public double pingCompFactor = 0.5;
+
     public static JrtConfig get() {
         if (instance == null) {
             instance = load();

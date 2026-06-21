@@ -3,7 +3,9 @@ plugins {
 	id 'maven-publish'
 }
 
-version = project.minecraft_version
+// Jar name carries both the mod version and the Minecraft version,
+// e.g. combat-tracker-1.0.1+1.21.11.jar
+version = "${project.mod_version}+${project.minecraft_version}"
 group = project.maven_group
 
 base {

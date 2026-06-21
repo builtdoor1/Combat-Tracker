@@ -1,28 +1,34 @@
 package jump_reset_tracker;
 
 import jump_reset_tracker.config.JrtConfig;
-import jump_reset_tracker.detection.AttemptCorrelator;
-import jump_reset_tracker.detection.JumpDetector;
+import jump_reset_tracker.detection.JumpResetTracker;
 import jump_reset_tracker.stats.StatsTracker;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.player.LocalPlayer;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * Client entrypoint. Wires up config/stats loading, the HUD-toggle keybind, and
- * the per-tick jump detection. Hit detection and HUD rendering happen via mixins.
+ * the per-tick detection driver. Jump impulse capture and HUD rendering happen
+ * via mixins.
  */
 public class JumpResetTrackerClient implements ClientModInitializer {
     public static final String MOD_ID = "jump_reset_tracker";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
-    private final JumpDetector jumpDetector = new JumpDetector();
+    /**
+     * Pre-physics vertical velocity captured by {@code LocalPlayerMixin} at the
+     * HEAD of {@code move()} (written during the physics tick); read by the
+     * tracker in END_CLIENT_TICK.
+     */
+    public static volatile double preMoveVelocityY = 0.0;
+
+    private final JumpResetTracker tracker = new JumpResetTracker();
     private KeyMapping toggleHudKey;
 
     @Override
@@ -39,7 +45,7 @@ public class JumpResetTrackerClient implements ClientModInitializer {
 
         ClientTickEvents.END_CLIENT_TICK.register(this::onEndTick);
 
-        LOGGER.info("Jump Reset Tracker initialized (client-side, observational only)");
+        LOGGER.info("Combat Tracker initialized (client-side, observational only)");
     }
 
     private void onEndTick(Minecraft client) {
@@ -49,12 +55,8 @@ public class JumpResetTrackerClient implements ClientModInitializer {
             JrtConfig.save();
         }
 
-        LocalPlayer player = client.player;
-        if (player == null) {
-            return;
-        }
-        if (jumpDetector.detectJump(player, client.options)) {
-            AttemptCorrelator.get().onJump(System.currentTimeMillis());
+        if (client.player != null && client.level != null) {
+            tracker.tick(client);
         }
     }
 }
