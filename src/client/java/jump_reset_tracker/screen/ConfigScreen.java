@@ -2,6 +2,7 @@ package jump_reset_tracker.screen;
 
 import jump_reset_tracker.config.JrtConfig;
 import jump_reset_tracker.stats.StatsTracker;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
@@ -13,14 +14,18 @@ import java.util.function.LongConsumer;
 
 /**
  * Native configuration screen, opened from the Mod Menu entry. Lets the player
- * tune the jump-reset timing window and toggle the HUD / chat messages.
+ * tune the jump-reset timing window, toggle the HUD / chat messages, reposition
+ * the HUD, and clear the recorded stats.
  */
 public class ConfigScreen extends Screen {
     private final Screen parent;
     private final JrtConfig config = JrtConfig.get();
 
+    private boolean confirmingReset = false;
+    private Button resetButton;
+
     public ConfigScreen(Screen parent) {
-        super(Component.literal("Jump Reset Tracker"));
+        super(Component.literal("Combat Tracker"));
         this.parent = parent;
     }
 
@@ -30,7 +35,7 @@ public class ConfigScreen extends Screen {
         int w = 220;
         int h = 20;
         int gap = 24;
-        int y = 44;
+        int y = 36;
 
         addRenderableWidget(new MsSlider(cx - w / 2, y, w, h, "Success window LOWER",
                 config.window.lowerBoundMs, v -> config.window.lowerBoundMs = v));
@@ -52,16 +57,37 @@ public class ConfigScreen extends Screen {
             config.chatEnabled = !config.chatEnabled;
             b.setMessage(chatText());
         }).bounds(cx - w / 2, y, w, h).build());
-        y += gap + 8;
-
-        addRenderableWidget(Button.builder(Component.literal("Reset Stats"), b -> {
-            StatsTracker.get().reset();
-            StatsTracker.get().save();
-        }).bounds(cx - w / 2, y, w, h).build());
         y += gap;
 
-        addRenderableWidget(Button.builder(Component.literal("Done"), b -> this.onClose())
+        addRenderableWidget(Button.builder(Component.literal("Move HUD..."),
+                        b -> Minecraft.getInstance().setScreen(new HudPositionScreen(this)))
                 .bounds(cx - w / 2, y, w, h).build());
+        y += gap + 8;
+
+        resetButton = Button.builder(resetText(), b -> onResetClicked())
+                .bounds(cx - w / 2, y, w, h).build();
+        addRenderableWidget(resetButton);
+
+        addRenderableWidget(Button.builder(Component.literal("Done"), b -> this.onClose())
+                .bounds(cx - w / 2, this.height - 28, w, h).build());
+    }
+
+    private void onResetClicked() {
+        if (!confirmingReset) {
+            confirmingReset = true;
+            resetButton.setMessage(resetText());
+        } else {
+            StatsTracker.get().reset();
+            StatsTracker.get().save();
+            confirmingReset = false;
+            resetButton.setMessage(resetText());
+        }
+    }
+
+    private Component resetText() {
+        return confirmingReset
+                ? Component.literal("Click again to confirm").withStyle(ChatFormatting.RED)
+                : Component.literal("Reset Stats");
     }
 
     private Component hudText() {
@@ -76,7 +102,7 @@ public class ConfigScreen extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
         int titleWidth = this.font.width(this.title);
-        graphics.drawString(this.font, this.title, this.width / 2 - titleWidth / 2, 18, 0xFFFFFF55);
+        graphics.drawString(this.font, this.title, this.width / 2 - titleWidth / 2, 16, 0xFFFFFF55);
     }
 
     @Override

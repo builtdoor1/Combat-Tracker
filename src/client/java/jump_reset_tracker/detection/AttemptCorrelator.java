@@ -97,7 +97,7 @@ public class AttemptCorrelator {
             LocalPlayer player = Minecraft.getInstance().player;
             if (player != null) {
                 ChatFormatting fmt = success ? ChatFormatting.GREEN : ChatFormatting.RED;
-                player.displayClientMessage(Component.literal("[JRT] " + chatText).withStyle(fmt), false);
+                player.displayClientMessage(Component.literal("[Combat Tracker] " + chatText).withStyle(fmt), false);
             }
         }
     }

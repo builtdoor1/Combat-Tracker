@@ -2,7 +2,7 @@
 	"schemaVersion": 1,
 	"id": "jump_reset_tracker",
 	"version": "${version}",
-	"name": "Jump Reset Tracker",
+	"name": "Combat Tracker",
 	"description": "Client-side stat tracker that detects and records jump-reset timing in PvP. Purely observational - it never modifies game physics or mechanics.",
 	"authors": [
 		"Weilin"

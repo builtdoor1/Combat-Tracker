@@ -1,0 +1,105 @@
+package jump_reset_tracker.screen;
+
+import jump_reset_tracker.config.JrtConfig;
+import jump_reset_tracker.hud.HudRenderer;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.network.chat.Component;
+
+/**
+ * Lets the player drag the HUD overlay to any position on the screen.
+ * Opened from the config screen via "Move HUD...".
+ */
+public class HudPositionScreen extends Screen {
+    private static final int LEFT_BUTTON = 0;
+
+    private final Screen parent;
+    private final JrtConfig config = JrtConfig.get();
+
+    private boolean dragging = false;
+    private int dragOffsetX = 0;
+    private int dragOffsetY = 0;
+
+    public HudPositionScreen(Screen parent) {
+        super(Component.literal("Move HUD"));
+        this.parent = parent;
+    }
+
+    @Override
+    protected void init() {
+        addRenderableWidget(Button.builder(Component.literal("Done"), b -> this.onClose())
+                .bounds(this.width / 2 - 100, this.height - 28, 200, 20).build());
+        // Keep the stored position valid for the current screen size.
+        config.hudX = clampX(config.hudX);
+        config.hudY = clampY(config.hudY);
+    }
+
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        super.render(graphics, mouseX, mouseY, partialTick);
+
+        String hint = "Drag the overlay to reposition it, then click Done";
+        graphics.drawString(this.font, hint, this.width / 2 - this.font.width(hint) / 2, 24, 0xFFFFFFFF);
+
+        int x = config.hudX;
+        int y = config.hudY;
+        HudRenderer.renderAt(graphics, x, y);
+        graphics.renderOutline(x - 1, y - 1, HudRenderer.boxWidth(), HudRenderer.boxHeight(),
+                dragging ? 0xFFFFFF55 : 0xFF55FF55);
+    }
+
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() == LEFT_BUTTON && insideBox(event.x(), event.y())) {
+            dragging = true;
+            dragOffsetX = (int) (event.x() - config.hudX);
+            dragOffsetY = (int) (event.y() - config.hudY);
+            return true;
+        }
+        return super.mouseClicked(event, doubleClick);
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        if (dragging && event.button() == LEFT_BUTTON) {
+            config.hudX = clampX((int) (event.x() - dragOffsetX));
+            config.hudY = clampY((int) (event.y() - dragOffsetY));
+            return true;
+        }
+        return super.mouseDragged(event, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (event.button() == LEFT_BUTTON && dragging) {
+            dragging = false;
+            return true;
+        }
+        return super.mouseReleased(event);
+    }
+
+    private boolean insideBox(double mx, double my) {
+        int x = config.hudX - 1;
+        int y = config.hudY - 1;
+        int w = HudRenderer.boxWidth();
+        int h = HudRenderer.boxHeight();
+        return mx >= x && mx <= x + w && my >= y && my <= y + h;
+    }
+
+    private int clampX(int x) {
+        return Math.max(1, Math.min(x, this.width - HudRenderer.boxWidth()));
+    }
+
+    private int clampY(int y) {
+        return Math.max(1, Math.min(y, this.height - HudRenderer.boxHeight()));
+    }
+
+    @Override
+    public void onClose() {
+        JrtConfig.save();
+        Minecraft.getInstance().setScreen(parent);
+    }
+}

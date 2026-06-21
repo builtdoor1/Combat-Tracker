@@ -23,6 +23,9 @@ public class JrtConfig {
     public TimingWindow window = new TimingWindow();
     public boolean hudEnabled = true;
     public boolean chatEnabled = true;
+    /** Top-left position of the HUD overlay, in GUI-scaled pixels. */
+    public int hudX = 4;
+    public int hudY = 4;
 
     public static JrtConfig get() {
         if (instance == null) {
