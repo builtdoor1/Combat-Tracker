@@ -3,6 +3,7 @@ package jump_reset_tracker.screen;
 import jump_reset_tracker.config.JrtConfig;
 import jump_reset_tracker.hud.HudRenderer;
 import jump_reset_tracker.record.SessionRecorder;
+import jump_reset_tracker.stats.ComboStatsTracker;
 import jump_reset_tracker.stats.StatsTracker;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -105,6 +106,8 @@ public class ConfigScreen extends Screen {
         } else {
             StatsTracker.get().reset();
             StatsTracker.get().save();
+            ComboStatsTracker.get().reset();
+            ComboStatsTracker.get().save();
             confirmingReset = false;
         }
         resetButton.setMessage(resetText());

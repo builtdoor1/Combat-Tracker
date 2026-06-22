@@ -1,6 +1,7 @@
 package jump_reset_tracker.hud;
 
 import jump_reset_tracker.config.JrtConfig;
+import jump_reset_tracker.detection.ComboTracker;
 import jump_reset_tracker.record.SessionRecorder;
 import jump_reset_tracker.stats.ComboStatsTracker;
 import jump_reset_tracker.stats.StatsTracker;
@@ -134,16 +135,37 @@ public class HudRenderer {
             lines.add(new Line(String.format("● REC %d:%02d", s / 60, s % 60), 0xFFFF5555));
         }
 
+        int comboCount = ComboTracker.get().currentCombo();
+        long lastHit = combo.lastInterval();
+        double variance = combo.jitter();
+        int varColor = varianceColor(variance, combo.count());
+
         if (cfg.hudCompact) {
             lines.add(new Line(String.format("CT  JR %d/%d  %.0f%%", jr.hits(), jr.misses(), jr.successRate()), accent));
-            lines.add(new Line(String.format("Combo %.0f±%.0fms", combo.averageInterval(), combo.jitter()), 0xFFFFFFFF));
+            lines.add(new Line(String.format("Combo %d   Last %dms", comboCount, lastHit), 0xFFFFFFFF));
+            lines.add(new Line(String.format("Variance %.0fms", variance), varColor));
         } else {
             lines.add(new Line("Combat Tracker", accent));
             lines.add(new Line(String.format("Jump: %d hit / %d miss", jr.hits(), jr.misses()), 0xFFFFFFFF));
             lines.add(new Line(String.format("Rate %.1f%%  Avg %.0f SD %.0f", jr.successRate(), jr.averageDelta(), jr.stdDev()), 0xFFAAAAAA));
-            lines.add(new Line(String.format("Combo %.0fms  jitter ±%.0fms", combo.averageInterval(), combo.jitter()), accent));
-            lines.add(new Line(String.format("Combos %d   Last JR: %s", combo.combos(), jr.lastResult()), jr.lastResultColor()));
+            lines.add(new Line(String.format("Last JR: %s", jr.lastResult()), jr.lastResultColor()));
+            lines.add(new Line(String.format("Combo: %d   Last %dms", comboCount, lastHit), accent));
+            lines.add(new Line(String.format("Variance %.0fms", variance), varColor));
         }
         return lines;
+    }
+
+    /**
+     * Color for the combo-timing variance: red when the timing barely varies
+     * (bot-like, near-constant cadence), fading to white as it varies more
+     * (human). Neutral gray until there are enough samples to be meaningful.
+     */
+    private static int varianceColor(double varianceMs, int sampleCount) {
+        if (sampleCount < 5) {
+            return 0xFFAAAAAA;
+        }
+        double t = Math.max(0.0, Math.min(1.0, varianceMs / 50.0)); // 0ms = red, >=50ms = white
+        int gb = (int) Math.round(60 + t * (255 - 60));
+        return 0xFF000000 | (255 << 16) | (gb << 8) | gb;
     }
 }

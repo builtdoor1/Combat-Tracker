@@ -51,10 +51,13 @@ Toggle with **`J`** (rebindable under *Options → Controls*). Drag to repositio
 |------|---------|
 | Jump: X hit / Y miss | Jump-reset hits and misses |
 | Rate / Avg / SD | Success rate, average delta, standard deviation (ms) |
-| Combo … jitter ±… | Average combo interval and its jitter (ms) |
-| Combos / Last JR | Number of combos, and your last jump-reset result |
+| Last JR | Your last jump-reset result |
+| Combo: N   Last … | Live combo counter and the time of the last combo hit |
+| Variance … | How much your combo timing varies — **colored red when it barely varies (bot-like) and white when it varies a lot (human)** |
 
-**Compact layout** condenses this to two lines.
+The combo counter resets to 0 once you go ~1.5s without landing a hit (combo ended). The Variance value stays gray until there are enough samples to be meaningful.
+
+**Compact layout** condenses this to a few lines.
 
 ### Customizing the HUD
 All in the config screen:
@@ -66,6 +69,8 @@ All in the config screen:
 | **Layout** | Detailed | Toggle Detailed ↔ Compact. |
 | **Theme** | Yellow | Accent color (Yellow / Aqua / Green / Pink / Orange / White). |
 | **Move HUD…** | — | Drag the overlay anywhere on screen. |
+
+The config screen also has **Reset Stats** — clears **both** jump-reset and combo statistics (click twice to confirm) — and the recording controls (below).
 
 ---
 

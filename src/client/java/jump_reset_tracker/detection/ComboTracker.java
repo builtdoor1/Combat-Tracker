@@ -70,6 +70,11 @@ public class ComboTracker {
         }
     }
 
+    /** Live hit count of the current combo (0 when not comboing). */
+    public int currentCombo() {
+        return comboHits;
+    }
+
     private void breakCombo() {
         currentTargetId = -1;
         comboHits = 0;
