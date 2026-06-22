@@ -37,10 +37,6 @@ public class JrtConfig {
     /** Index into the HUD accent-color theme list. */
     public int hudThemeIndex = 0;
 
-    // ── Combo detection tuning ────────────────────────────────────────────────
-    /** Max gap (ms) between sprint hits for them to remain one combo. */
-    public int maxComboGapMs = 500;
-
     // ── Detection tuning (advanced; edit in config.json) ──────────────────────
     /** Minimum horizontal speed just after damage to treat it as a real combat hit
      *  (filters fall / fire / poison, which have no horizontal knockback). */

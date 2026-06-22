@@ -1,6 +1,5 @@
 package jump_reset_tracker.detection;
 
-import jump_reset_tracker.config.JrtConfig;
 import jump_reset_tracker.record.SessionRecorder;
 import jump_reset_tracker.stats.ComboStatsTracker;
 import net.minecraft.client.Minecraft;
@@ -23,6 +22,14 @@ public class ComboTracker {
         return INSTANCE;
     }
 
+    /**
+     * A combo ends if no hit lands within this gap. Derived from the sword attack
+     * cooldown (~0.625s to fully recharge) plus a small grace window: if you don't
+     * swing shortly after your sword is charged, the combo is over. Hardcoded so a
+     * stale config.json can't override it.
+     */
+    private static final long COMBO_GAP_NANO = 700L * 1_000_000L;
+
     private int currentTargetId = -1;
     private long lastHitNano = 0L;
     private int comboHits = 0;
@@ -39,7 +46,7 @@ public class ComboTracker {
         }
 
         long nano = System.nanoTime();
-        long maxGapNano = (long) JrtConfig.get().maxComboGapMs * 1_000_000L;
+        long maxGapNano = COMBO_GAP_NANO;
 
         if (target.getId() == currentTargetId && comboHits >= 1 && (nano - lastHitNano) <= maxGapNano) {
             long intervalMs = (nano - lastHitNano) / 1_000_000L;
@@ -63,7 +70,7 @@ public class ComboTracker {
         prevHurtTime = player.hurtTime;
 
         if (currentTargetId != -1) {
-            long maxGapNano = (long) JrtConfig.get().maxComboGapMs * 1_000_000L;
+            long maxGapNano = COMBO_GAP_NANO;
             if (System.nanoTime() - lastHitNano > maxGapNano) {
                 breakCombo();
             }
