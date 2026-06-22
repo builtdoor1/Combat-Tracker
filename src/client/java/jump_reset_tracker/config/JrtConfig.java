@@ -39,7 +39,7 @@ public class JrtConfig {
 
     // ── Combo detection tuning ────────────────────────────────────────────────
     /** Max gap (ms) between sprint hits for them to remain one combo. */
-    public int maxComboGapMs = 1500;
+    public int maxComboGapMs = 1000;
 
     // ── Detection tuning (advanced; edit in config.json) ──────────────────────
     /** Minimum horizontal speed just after damage to treat it as a real combat hit

@@ -55,7 +55,7 @@ Toggle with **`J`** (rebindable under *Options → Controls*). Drag to repositio
 | Combo: N   Last … | Live combo counter and the time of the last combo hit |
 | Variance … | How much your combo timing varies — **colored red when it barely varies (bot-like) and white when it varies a lot (human)** |
 
-The combo counter resets to 0 once you go ~1.5s without landing a hit (combo ended). The Variance value stays gray until there are enough samples to be meaningful.
+The combo counter resets to 0 once you go ~1s without landing a hit (combo ended). The Variance value stays gray until there are enough samples to be meaningful.
 
 **Compact layout** condenses this to a few lines.
 
@@ -113,7 +113,7 @@ Each session embeds a **SHA-256 hash** and an **HMAC-SHA256 signature** over the
 | `knockbackThreshold` | `0.065` | Min horizontal speed after damage to count it as a combat hit. |
 | `windowTicksGround` / `windowTicksAir` | `6` / `10` | Ticks after a hit during which a jump still counts. |
 | `pingCompFactor` | `0.5` | Fraction of round-trip ping treated as one-way latency. `0` disables. |
-| `maxComboGapMs` | `1500` | Max gap between sprint hits to stay one combo. |
+| `maxComboGapMs` | `1000` | Max gap between sprint hits to stay one combo. |
 
 The success-window bounds (`lowerBoundMs` `0`, `upperBoundMs` `80`) are editable from the config screen sliders.
 
