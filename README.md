@@ -17,7 +17,8 @@ Two things it proves about *you*:
 2. Put these in your `.minecraft/mods` folder:
    - `combat-tracker-<version>+1.21.11.jar` — from the [latest release](../../releases/latest)
    - [Fabric API](https://modrinth.com/mod/fabric-api) (`0.141.4+1.21.11`)
-   - *(optional)* [Mod Menu](https://modrinth.com/mod/modmenu) — for the in-game config screen
+   - [Cloth Config](https://modrinth.com/mod/cloth-config) — builds the settings screen
+   - *(optional)* [Mod Menu](https://modrinth.com/mod/modmenu) — adds the button that opens it
 3. Launch Minecraft.
 
 ---
@@ -60,17 +61,21 @@ The combo counter resets to 0 once you go ~0.7s without landing a hit — roughl
 **Compact layout** condenses this to a few lines.
 
 ### Customizing the HUD
-All in the config screen:
+Open the settings screen from **Mod Menu → Combat Tracker → Config**. It has three tabs.
+
+**General:**
 
 | Control | Default | Effect |
 |---------|---------|--------|
+| **Show HUD** | On | Master switch for the overlay (same as the `J` keybind). |
+| **Chat messages** | On | One line per jump-reset attempt. |
+| **Compact layout** | Off | Condense the HUD to a few lines. |
 | **HUD scale** | `1.00x` | Shrinks/enlarges the whole overlay (0.5–2.0). |
-| **BG opacity** | `56%` | Background box transparency (0 = no box). |
-| **Layout** | Detailed | Toggle Detailed ↔ Compact. |
+| **Background opacity** | `56%` | Background box transparency (0 = no box). |
 | **Theme** | Yellow | Accent color (Yellow / Aqua / Green / Pink / Orange / White). |
 | **Move HUD…** | — | Drag the overlay anywhere on screen. |
 
-The config screen also has **Reset Stats** — clears **both** jump-reset and combo statistics (click twice to confirm) — and the recording controls (below).
+**Timing** holds the detection tuning (see below). **Recording** holds the session controls and **Reset stats**, which clears **both** jump-reset and combo statistics (click twice to confirm).
 
 ---
 
@@ -106,17 +111,16 @@ Each session embeds a **SHA-256 hash** and an **HMAC-SHA256 signature** over the
 └── recordings/        # session .html reports + .json data
 ```
 
-### Advanced tuning (`config.json`, no GUI)
+### Detection tuning (**Timing** tab)
 
-| Key | Default | Meaning |
-|-----|---------|---------|
-| `knockbackThreshold` | `0.065` | Min horizontal speed after damage to count it as a combat hit. |
-| `windowTicksGround` / `windowTicksAir` | `6` / `10` | Ticks after a hit during which a jump still counts. |
-| `pingCompFactor` | `0.5` | Fraction of round-trip ping treated as one-way latency. `0` disables. |
+| Setting | Key | Default | Meaning |
+|---------|-----|---------|---------|
+| Success window min / max | `lowerBoundMs` / `upperBoundMs` | `0` / `80` ms | Bounds of a successful jump reset. |
+| Knockback threshold | `knockbackThreshold` | `0.065` | Min horizontal speed after damage to count it as a combat hit. |
+| Window ticks (grounded / airborne) | `windowTicksGround` / `windowTicksAir` | `6` / `10` | Ticks after a hit during which a jump still counts. |
+| Ping compensation | `pingCompFactor` | `0.5` | Fraction of round-trip ping treated as one-way latency. `0` disables. |
 
-The combo gap (~0.7s, sword cooldown + grace) is a fixed constant and intentionally not configurable.
-
-The success-window bounds (`lowerBoundMs` `0`, `upperBoundMs` `80`) are editable from the config screen sliders.
+All of these are also editable directly in `config.json`. The combo gap (~0.7s, sword cooldown + grace) is a fixed constant and intentionally not configurable.
 
 ---
 
