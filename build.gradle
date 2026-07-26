@@ -71,6 +71,17 @@ tasks.withType(JavaCompile).configureEach {
 	it.options.release = 21
 }
 
+// Renders a synthetic session report + share link without launching the game.
+// Everything downstream of SessionData is deliberately Minecraft-free so this works.
+tasks.register('reportPreview', JavaExec) {
+	group = 'verification'
+	description = 'Render a synthetic session report and share link to build/preview'
+	classpath = sourceSets.client.runtimeClasspath
+	mainClass = 'combat_tracker.record.ReportPreview'
+	args = [project.findProperty('previewOut') ?: 'build/preview',
+			project.findProperty('previewEvents') ?: '120']
+}
+
 java {
 	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
 	// if it is present.

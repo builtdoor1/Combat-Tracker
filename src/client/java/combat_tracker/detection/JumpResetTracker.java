@@ -7,7 +7,6 @@ import combat_tracker.record.SessionRecorder;
 import combat_tracker.stats.StatsTracker;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 
@@ -35,6 +34,28 @@ public class JumpResetTracker {
     /** Per-result cooldown so one exchange can't spam multiple results. */
     private static final int RESULT_COOLDOWN_TICKS = 4;
 
+    /**
+     * Minimum horizontal speed just after damage for it to count as a real combat
+     * hit. Fall, fire and poison impart no horizontal knockback and land far below
+     * this; a melee hit lands far above it, so the gap is wide and there is no
+     * better value to pick. Hardcoded — like {@link ComboTracker}'s combo gap — so
+     * a stale or hand-edited config.json can't skew what counts as a hit.
+     */
+    private static final double KNOCKBACK_THRESHOLD = 0.065;
+
+    /**
+     * Ticks after a grounded hit during which a jump still counts as an attempt.
+     * Six ticks (~300ms) is comfortably past any human reaction time while staying
+     * short enough that an unrelated later jump isn't swept in.
+     */
+    private static final int WINDOW_TICKS_GROUND = 6;
+
+    /**
+     * Airborne hits get a longer window: you cannot jump until you land, so the
+     * clock has to keep running through the fall.
+     */
+    private static final int WINDOW_TICKS_AIR = 10;
+
     private enum State { IDLE, WINDOW_ACTIVE }
 
     private State state = State.IDLE;
@@ -49,7 +70,7 @@ public class JumpResetTracker {
     private long hitNano = 0L;
     private boolean hitWasGrounded = true;
 
-    private double lastKnownPing = 1.0;
+    private final LatencyEstimator latency = new LatencyEstimator();
 
     // Per-tick carry-overs
     private int prevHurtTime = 0;
@@ -64,7 +85,6 @@ public class JumpResetTracker {
             return;
         }
 
-        CtConfig cfg = CtConfig.get();
         long tickNano = System.nanoTime();
 
         // ── Sample this tick's state ──────────────────────────────────────────
@@ -74,7 +94,7 @@ public class JumpResetTracker {
         boolean onGround = player.onGround();
         int hurtTime = player.hurtTime;
         int invulnTime = player.invulnerableTime;
-        double ping = measurePing(client);
+        latency.sample(client);
 
         // ── Jump detection (real jumpFromGround call) ─────────────────────────
         long jumpSignalNano = CombatTrackerClient.consumeJumpNano();
@@ -88,14 +108,14 @@ public class JumpResetTracker {
         boolean hitNow = prevHurtTime == 0
                 && hurtTime > 0
                 && invulnTime > 0
-                && horizMag > cfg.knockbackThreshold;
+                && horizMag > KNOCKBACK_THRESHOLD;
         if (hitNow) {
-            handleHit(cfg, tickNano, ping);
+            handleHit(tickNano);
         }
 
         // ── Close an expired window (player never jumped → not an attempt) ────
         if (state == State.WINDOW_ACTIVE) {
-            int maxTicks = hitWasGrounded ? cfg.windowTicksGround : cfg.windowTicksAir;
+            int maxTicks = hitWasGrounded ? WINDOW_TICKS_GROUND : WINDOW_TICKS_AIR;
             if (currentTick - hitTick > maxTicks) {
                 state = State.IDLE;
             }
@@ -104,7 +124,7 @@ public class JumpResetTracker {
         // ── Score a jump that lands inside an open window ─────────────────────
         if (jumpNow && state == State.WINDOW_ACTIVE && readyForResult()) {
             double ms = (lastJumpNano - hitNano) / 1_000_000.0;
-            registerAttempt(ms, ping);
+            registerAttempt(ms);
             state = State.IDLE;
         }
 
@@ -112,17 +132,19 @@ public class JumpResetTracker {
         prevOnGround = onGround;
     }
 
-    private void handleHit(CtConfig cfg, long tickNano, double ping) {
+    private void handleHit(long tickNano) {
         // Use the precise hit time from the mixin; fall back to the tick time.
+        // The hit reaches us one-way-latency late, so wind the timestamp back by
+        // the automatically estimated one-way time.
         long base = CombatTrackerClient.hitNano != 0L ? CombatTrackerClient.hitNano : tickNano;
-        long compHitNano = base - (long) (ping * cfg.pingCompFactor * 1_000_000.0);
+        long compHitNano = base - (long) (latency.oneWayMs() * 1_000_000.0);
 
         int ticksSinceJump = currentTick - lastJumpTick;
 
         // A real jump on this tick (same-tick reset) or 1–2 ticks before the hit:
         // pair them and use the actual signed sub-tick delta (jump − hit).
         if (ticksSinceJump >= 0 && ticksSinceJump <= JUMP_LOOKBACK_TICKS && readyForResult()) {
-            registerAttempt((lastJumpNano - compHitNano) / 1_000_000.0, ping);
+            registerAttempt((lastJumpNano - compHitNano) / 1_000_000.0);
             state = State.IDLE;
             return;
         }
@@ -144,7 +166,7 @@ public class JumpResetTracker {
         return currentTick - lastResultTick >= RESULT_COOLDOWN_TICKS;
     }
 
-    private void registerAttempt(double ms, double ping) {
+    private void registerAttempt(double ms) {
         lastResultTick = currentTick;
         long delta = Math.round(ms);
 
@@ -188,23 +210,12 @@ public class JumpResetTracker {
         }
     }
 
-    private double measurePing(Minecraft client) {
-        if (client.getConnection() == null || client.player == null) {
-            return lastKnownPing;
-        }
-        PlayerInfo info = client.getConnection().getPlayerInfo(client.player.getUUID());
-        if (info == null) {
-            return lastKnownPing;
-        }
-        lastKnownPing = Math.max(1.0, info.getLatency());
-        return lastKnownPing;
-    }
-
     private void reset() {
         state = State.IDLE;
         prevHurtTime = 0;
         prevOnGround = true;
         lastJumpTick = Integer.MIN_VALUE / 2;
         lastJumpNano = 0L;
+        latency.reset();
     }
 }

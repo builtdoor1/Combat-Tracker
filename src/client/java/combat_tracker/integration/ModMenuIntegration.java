@@ -142,31 +142,11 @@ public class ModMenuIntegration implements ModMenuApi {
                 .setSaveConsumer(v -> config.window.upperBoundMs = v)
                 .build());
 
-        timing.addEntry(eb.startDoubleField(Component.literal("Knockback threshold"), config.knockbackThreshold)
-                .setMin(0.0).setMax(1.0)
-                .setDefaultValue(0.065)
-                .setTooltip(Component.literal("Min horizontal speed after damage to count it as a combat hit."),
-                        Component.literal("Filters fall, fire and poison damage.").withStyle(ChatFormatting.GRAY))
-                .setSaveConsumer(v -> config.knockbackThreshold = v)
-                .build());
-
-        timing.addEntry(eb.startIntSlider(Component.literal("Window ticks (grounded)"), config.windowTicksGround, 1, 40)
-                .setDefaultValue(6)
-                .setTooltip(Component.literal("Ticks after a grounded hit during which a jump still counts."))
-                .setSaveConsumer(v -> config.windowTicksGround = v)
-                .build());
-
-        timing.addEntry(eb.startIntSlider(Component.literal("Window ticks (airborne)"), config.windowTicksAir, 1, 40)
-                .setDefaultValue(10)
-                .setTooltip(Component.literal("Ticks after an airborne hit during which a jump still counts."))
-                .setSaveConsumer(v -> config.windowTicksAir = v)
-                .build());
-
-        timing.addEntry(eb.startDoubleField(Component.literal("Ping compensation"), config.pingCompFactor)
-                .setMin(0.0).setMax(1.0)
-                .setDefaultValue(0.5)
-                .setTooltip(Component.literal("Fraction of round-trip ping treated as one-way latency. 0 disables."))
-                .setSaveConsumer(v -> config.pingCompFactor = v)
+        timing.addEntry(eb.startTextDescription(Component.literal(
+                        "Detection tuning is fixed and not adjustable. Knockback threshold and the post-hit "
+                                + "tick windows are constants, and ping compensation is measured automatically "
+                                + "from your latency to the server. A report is only worth something if every "
+                                + "copy of the mod measured the same way."))
                 .build());
     }
 
@@ -187,6 +167,11 @@ public class ModMenuIntegration implements ModMenuApi {
 
         recording.addEntry(new ButtonEntry(Component.literal("Open recordings folder"), b -> openRecordings()));
 
+        recording.addEntry(new ButtonEntry(Component.literal("Copy share link (last session)"),
+                Component.literal("Copies a link to your most recent session. The data travels inside the "
+                        + "link itself and is never uploaded anywhere."),
+                b -> copyShareLink(b)));
+
         recording.addEntry(new ButtonEntry(Component.literal("Reset stats"),
                 Component.literal("Clears both jump-reset and combo statistics. Click twice to confirm."),
                 new ResetHandler()));
@@ -196,6 +181,17 @@ public class ModMenuIntegration implements ModMenuApi {
         return SessionRecorder.get().isRecording()
                 ? Component.literal("Stop Recording").withStyle(ChatFormatting.RED)
                 : Component.literal("Start Recording").withStyle(ChatFormatting.GREEN);
+    }
+
+    /** Puts the last session's share link on the system clipboard. */
+    private static void copyShareLink(Button button) {
+        String link = SessionRecorder.get().lastShareLink();
+        if (link == null) {
+            button.setMessage(Component.literal("No session recorded yet").withStyle(ChatFormatting.RED));
+            return;
+        }
+        Minecraft.getInstance().keyboardHandler.setClipboard(link);
+        button.setMessage(Component.literal("Link copied").withStyle(ChatFormatting.GREEN));
     }
 
     private static void openRecordings() {

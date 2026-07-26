@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Combat Tracker &mdash; Session</title>
+<style>
+  body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#14161a;color:#e8eaed;margin:0;padding:24px;}
+  h1{font-size:20px;margin:0 0 4px;}
+  h2{font-size:15px;margin:24px 0 8px;color:#9fb3c8;}
+  .sub{color:#8a93a0;font-size:13px;margin-bottom:16px;max-width:760px;line-height:1.5;}
+  .who{display:flex;align-items:center;gap:12px;margin:12px 0 4px;flex-wrap:wrap;}
+  .who img{width:48px;height:48px;image-rendering:pixelated;border-radius:6px;background:#1c2026;}
+  .who .ign{font-size:22px;font-weight:600;}
+  .vs{display:flex;align-items:center;gap:8px;color:#8a93a0;font-size:13px;flex-wrap:wrap;}
+  .vs img{width:24px;height:24px;image-rendering:pixelated;border-radius:4px;background:#1c2026;}
+  table{border-collapse:collapse;font-size:13px;margin:4px 0;}
+  td,th{border:1px solid #2a2f37;padding:4px 10px;text-align:left;}
+  th{background:#1c2026;color:#9fb3c8;}
+  .cards{display:flex;flex-wrap:wrap;gap:12px;margin:8px 0;}
+  .card{background:#1c2026;border:1px solid #2a2f37;border-radius:8px;padding:10px 16px;min-width:110px;}
+  .card .v{font-size:22px;font-weight:600;}
+  .card .k{font-size:12px;color:#8a93a0;}
+  .note{background:#161a20;border:1px solid #2a2f37;border-radius:8px;padding:12px;font-size:12px;
+        max-width:760px;line-height:1.6;color:#9fb3c8;}
+  .warn{color:#ffb454;}
+  .thin{color:#ffb454;font-size:12px;margin:4px 0 8px;}
+  circle:hover{stroke:#fff;stroke-width:1.5;}
+  #empty{max-width:640px;line-height:1.6;}
+  code{background:#0f1114;padding:2px 6px;border-radius:4px;font-size:12px;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const HIT = '#4caf50', MISS = '#ef5350', COMBO = '#29b6f6', ACCENT = '#ffb454';
+const VANILLA_REACH = 3.0, HB_W = 0.3, HB_H = 0.9;
+
+// ── Binary reader ──────────────────────────────────────────────────────────
+// Mirrors SharePayload's writer exactly. Bit operators are avoided for the wide
+// values: JavaScript's are 32-bit, and an epoch timestamp needs 41.
+class Reader {
+  constructor(bytes) { this.b = bytes; this.p = 0; }
+  u8()      { return this.b[this.p++]; }
+  varLong() {
+    let result = 0, shift = 0, byte;
+    do { byte = this.b[this.p++]; result += (byte & 0x7f) * Math.pow(2, shift); shift += 7; }
+    while (byte & 0x80);
+    return result;
+  }
+  zig()  { const n = this.varLong(); return (n % 2 === 0) ? n / 2 : -(n + 1) / 2; }
+  cent() { return this.zig() / 100; }
+  str()  {
+    const len = this.varLong();
+    const slice = this.b.subarray(this.p, this.p + len);
+    this.p += len;
+    return new TextDecoder().decode(slice);
+  }
+}
+
+function b64urlToBytes(s) {
+  const pad = s.length % 4 === 0 ? '' : '='.repeat(4 - (s.length % 4));
+  const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/') + pad);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+async function inflateRaw(bytes) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+function decode(raw) {
+  const r = new Reader(raw);
+  const version = r.u8();
+  if (version !== 1) throw new Error('This link uses format version ' + version + ', which this page cannot read yet.');
+
+  const d = { version };
+  d.player = r.str();
+  d.playerUuid = r.str();
+  d.startEpochMs = r.varLong();
+  d.durationMs = r.varLong();
+  d.endEpochMs = d.startEpochMs + d.durationMs;
+
+  const oc = r.varLong();
+  d.opponents = [];
+  for (let i = 0; i < oc; i++) d.opponents.push(r.str());
+
+  d.jumpAttempts = r.varLong(); d.jumpHits = r.varLong();
+  d.jumpAvgMs = r.cent();       d.jumpSdMs = r.cent();
+  d.combos = r.varLong();       d.comboIntervals = r.varLong();
+  d.comboAvgMs = r.cent();      d.comboJitterMs = r.cent();
+  d.swings = r.varLong();       d.swingHits = r.varLong();
+  d.reachAvg = r.cent();        d.reachMax = r.cent();  d.reachSd = r.cent();
+  d.aimAvg = r.cent();          d.aimSd = r.cent();
+
+  d.jumpTotal = r.varLong();
+  let n = r.varLong(), t = d.startEpochMs;
+  d.jumps = [];
+  for (let i = 0; i < n; i++) {
+    t += r.varLong();
+    const packed = r.zig();
+    d.jumps.push({ t, delta: Math.floor(packed / 4), code: ((packed % 4) + 4) % 4 });
+  }
+
+  d.comboTotal = r.varLong();
+  n = r.varLong(); t = d.startEpochMs;
+  d.comboList = [];
+  for (let i = 0; i < n; i++) {
+    t += r.varLong();
+    const packed = r.varLong();
+    d.comboList.push({ t, interval: Math.floor(packed / 2), newCombo: packed % 2 === 1 });
+  }
+
+  d.swingTotal = r.varLong();
+  n = r.varLong(); t = d.startEpochMs;
+  d.swingList = [];
+  for (let i = 0; i < n; i++) {
+    t += r.varLong();
+    const reach = r.varLong() / 100;
+    const aimDeg = r.varLong() / 100;
+    const offX = r.zig() / 1000;
+    const offY = r.zig() / 1000;
+    const packed = r.varLong();
+    d.swingList.push({ t, reach, aimDeg, offX, offY, hit: packed % 2 === 1, target: Math.floor(packed / 2) - 1 });
+  }
+  return d;
+}
+
+// ── Chart drawing ──────────────────────────────────────────────────────────
+const W = 720, H = 260, ML = 48, MR = 16, MT = 28, MB = 30;
+const PW = W - ML - MR, PH = H - MT - MB;
+
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function f2(v) { return Number(v).toFixed(2); }
+
+function svgOpen(w, h) {
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" width="100%" style="max-width:${w + 40}px;` +
+         `background:#161a20;border:1px solid #2a2f37;border-radius:8px;cursor:grab;touch-action:none;">`;
+}
+function chartTitle(text) {
+  return `<text x="${ML}" y="18" fill="#9fb3c8" font-size="13" font-family="sans-serif">${esc(text)}</text>`;
+}
+function noData(w, h) {
+  return `<text x="${w / 2}" y="${h / 2}" fill="#5f6772" font-size="13" text-anchor="middle" ` +
+         `font-family="sans-serif">no data recorded</text></svg>`;
+}
+function axes(yMin, yMax) {
+  let s = `<line x1="${ML}" y1="${MT}" x2="${ML}" y2="${MT + PH}" stroke="#2a2f37"/>` +
+          `<line x1="${ML}" y1="${MT + PH}" x2="${ML + PW}" y2="${MT + PH}" stroke="#2a2f37"/>`;
+  for (let i = 0; i <= 2; i++) {
+    const val = yMin + (yMax - yMin) * i / 2;
+    const yy = MT + PH - (val - yMin) / (yMax - yMin) * PH;
+    s += `<line x1="${ML - 3}" y1="${yy}" x2="${ML + PW}" y2="${yy}" stroke="#21262e"/>` +
+         `<text x="${ML - 6}" y="${yy + 3}" fill="#6b7480" font-size="10" text-anchor="end" ` +
+         `font-family="sans-serif">${Math.abs(val) >= 10 ? Math.round(val) : f2(val)}</text>`;
+  }
+  return s;
+}
+function dot(x, y, color, tip, r) {
+  return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r || 3}" fill="${color}" ` +
+         `fill-opacity="0.8"><title>${esc(tip)}</title></circle>`;
+}
+function tOff(ms) { return '+' + Math.floor(ms / 1000) + '.' + String(Math.abs(ms % 1000)).padStart(3, '0') + 's'; }
+
+function seriesChart(title, pts, d, opts) {
+  let s = svgOpen(W, H) + chartTitle(title);
+  if (!pts.length) return s + noData(W, H);
+  let yMax = opts.baseMax || 1;
+  let yMin = 0;
+  for (const p of pts) { yMax = Math.max(yMax, opts.value(p)); yMin = Math.min(yMin, opts.value(p)); }
+  yMax = yMax * 1.12 + (opts.pad || 0);
+  const span = Math.max(1, d.endEpochMs - d.startEpochMs);
+  s += axes(yMin, yMax);
+
+  if (opts.refLine) {
+    const ry = MT + PH - (opts.refLine - yMin) / (yMax - yMin) * PH;
+    s += `<line x1="${ML}" y1="${ry}" x2="${ML + PW}" y2="${ry}" stroke="${ACCENT}" stroke-width="1" ` +
+         `stroke-dasharray="4 4"/><text x="${ML + PW}" y="${ry - 4}" fill="${ACCENT}" font-size="10" ` +
+         `text-anchor="end" font-family="sans-serif">${esc(opts.refLabel)}</text>`;
+  }
+
+  let poly = '', dots = '';
+  for (const p of pts) {
+    const x = ML + (p.t - d.startEpochMs) / span * PW;
+    const y = MT + PH - (opts.value(p) - yMin) / (yMax - yMin) * PH;
+    poly += `${x.toFixed(1)},${y.toFixed(1)} `;
+    dots += dot(x, y, opts.color(p), opts.tip(p, d));
+  }
+  if (opts.line !== false) {
+    s += `<polyline points="${poly.trim()}" fill="none" stroke="${opts.lineColor || HIT}" ` +
+         `stroke-opacity="0.35" stroke-width="1"/>`;
+  }
+  return s + dots + '</svg>';
+}
+
+function aimScatter(d) {
+  const w = 420, h = 460, ml = 44, mr = 16, mt = 28, mb = 34;
+  const pw = w - ml - mr, ph = h - mt - mb;
+  let s = svgOpen(w, h) + chartTitle('Aim offset from hitbox centre (blocks)');
+  if (!d.swingList.length) return s + noData(w, h);
+
+  let halfW = HB_W * 1.6, halfH = HB_H * 1.25;
+  for (const e of d.swingList) {
+    halfW = Math.max(halfW, Math.abs(e.offX) * 1.1);
+    halfH = Math.max(halfH, Math.abs(e.offY) * 1.1);
+  }
+  // One scale on both axes so the hitbox keeps its real proportions.
+  const scale = Math.min(pw / (2 * halfW), ph / (2 * halfH));
+  const cx = ml + pw / 2, cy = mt + ph / 2;
+  const bw = HB_W * scale, bh = HB_H * scale;
+
+  s += `<rect x="${(cx - bw).toFixed(1)}" y="${(cy - bh).toFixed(1)}" width="${(bw * 2).toFixed(1)}" ` +
+       `height="${(bh * 2).toFixed(1)}" fill="${HIT}" fill-opacity="0.06" stroke="#4a5561" stroke-width="1"/>`;
+  s += `<line x1="${cx.toFixed(1)}" y1="${mt}" x2="${cx.toFixed(1)}" y2="${mt + ph}" stroke="#2a2f37"/>`;
+  s += `<line x1="${ml}" y1="${cy.toFixed(1)}" x2="${ml + pw}" y2="${cy.toFixed(1)}" stroke="#2a2f37"/>`;
+
+  for (const e of d.swingList) {
+    const who = e.target >= 0 && d.opponents[e.target] ? ' vs ' + d.opponents[e.target] : '';
+    s += dot(cx + e.offX * scale, cy - e.offY * scale, e.hit ? HIT : MISS,
+             `${f2(e.offX)}, ${f2(e.offY)} blocks / ${f2(e.aimDeg)} deg${who}`);
+  }
+  s += `<text x="${ml}" y="${h - 10}" fill="#6b7480" font-size="10" font-family="sans-serif">` +
+       `box = player hitbox to scale &#183; green landed, red whiffed</text>`;
+  return s + '</svg>';
+}
+
+// ── Page ───────────────────────────────────────────────────────────────────
+function card(v, k) { return `<div class="card"><div class="v">${v}</div><div class="k">${k}</div></div>`; }
+
+function thinNote(shown, total, what) {
+  if (shown >= total) return '';
+  return `<div class="thin">Graph shows ${shown} of ${total} ${what} &mdash; the link carries an evenly spaced ` +
+         `sample so it stays short enough to send. The figures above are computed over all ${total}.</div>`;
+}
+
+function head(nameOrUuid, size) {
+  return `<img src="https://mc-heads.net/avatar/${encodeURIComponent(nameOrUuid)}/${size}" alt="" ` +
+         `onerror="this.style.visibility='hidden'">`;
+}
+
+function render(d) {
+  const dur = Math.max(0, Math.floor(d.durationMs / 1000));
+  const started = new Date(d.startEpochMs).toISOString().replace('T', ' ').replace(/\..+/, ' UTC');
+
+  let h = `<h1>Combat Tracker &mdash; Session Report</h1>`;
+  h += `<div class="who">${head(d.playerUuid || d.player, 48)}<span class="ign">${esc(d.player)}</span></div>`;
+  if (d.opponents.length) {
+    h += `<div class="vs">vs ${d.opponents.map(o => head(o, 24) + ' ' + esc(o)).join(' &nbsp; ')}</div>`;
+  }
+  h += `<div class="sub">${esc(started)} &middot; ${Math.floor(dur / 60)}m ${dur % 60}s &middot; ` +
+       `charts: scroll to zoom, drag to pan, double-click to reset.</div>`;
+
+  h += `<h2>Jump resets</h2><div class="cards">` +
+       card(d.jumpAttempts, 'attempts') + card(d.jumpHits, 'hits') +
+       card(d.jumpAttempts - d.jumpHits, 'misses') +
+       card(f2(d.jumpAvgMs) + ' ms', 'avg delta') + card(f2(d.jumpSdMs) + ' ms', 'std dev') + `</div>`;
+  h += thinNote(d.jumps.length, d.jumpTotal, 'attempts');
+  h += seriesChart('Jump-reset delta over time (ms)', d.jumps, d, {
+    value: p => p.delta, color: p => p.code === 0 ? HIT : MISS,
+    tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${p.delta} ms (${['SUCCESS', 'TOO_EARLY', 'TOO_LATE'][p.code]})`,
+  });
+
+  h += `<h2>Combo timing</h2><div class="cards">` +
+       card(d.combos, 'combos') + card(d.comboIntervals, 'intervals') +
+       card(f2(d.comboAvgMs) + ' ms', 'avg interval') + card(f2(d.comboJitterMs) + ' ms', 'jitter (SD)') + `</div>`;
+  h += `<div class="sub">Low jitter relative to the average suggests automated (triggerbot) timing; a human ` +
+       `combo shows wider spread.</div>`;
+  h += thinNote(d.comboList.length, d.comboTotal, 'intervals');
+  h += seriesChart('Combo inter-hit interval over time (ms)', d.comboList, d, {
+    value: p => p.interval, color: () => COMBO, lineColor: COMBO,
+    tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${p.interval} ms`,
+  });
+
+  h += `<h2>Reach</h2><div class="cards">` +
+       card(d.swings, 'swings') + card(d.swingHits, 'landed') + card(d.swings - d.swingHits, 'whiffed') +
+       card(f2(d.reachAvg) + ' b', 'avg reach') + card(f2(d.reachMax) + ' b', 'max reach') +
+       card(f2(d.reachSd) + ' b', 'std dev') + `</div>`;
+  h += `<div class="sub">Distance from the player's eyes to the target's hitbox on every swing. Green landed, ` +
+       `red whiffed. The dashed line is vanilla melee range (3.0 blocks).</div>`;
+  h += thinNote(d.swingList.length, d.swingTotal, 'swings');
+  h += seriesChart('Reach per swing (blocks)', d.swingList, d, {
+    value: p => p.reach, color: p => p.hit ? HIT : MISS, line: false,
+    baseMax: VANILLA_REACH, refLine: VANILLA_REACH, refLabel: 'vanilla 3.0',
+    tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${f2(p.reach)} blocks ${p.hit ? '(landed)' : '(whiffed)'}` +
+                    (p.target >= 0 && dd.opponents[p.target] ? ' vs ' + dd.opponents[p.target] : ''),
+  });
+
+  h += `<h2>Aim placement</h2><div class="cards">` +
+       card(f2(d.aimAvg) + '&deg;', 'avg off-centre') + card(f2(d.aimSd) + '&deg;', 'std dev') + `</div>`;
+  h += `<div class="sub">Where the crosshair sat relative to the middle of the target's hitbox, drawn to scale ` +
+       `(0.6 &times; 1.8 blocks). Human aim scatters across the box; a tight cluster on dead centre is what an ` +
+       `aim assist looks like.</div>`;
+  h += aimScatter(d);
+
+  h += `<h2>What this is</h2><div class="note">Generated by ` +
+       `<a href="https://github.com/reeeeman1/Combat-Tracker" style="color:#29b6f6">Combat Tracker</a>, a ` +
+       `client-side Minecraft mod that only observes &mdash; it never changes movement, reach or aim.` +
+       `<br><br><span class="warn">Read this honestly:</span> the whole session travels inside this link, so ` +
+       `nothing was uploaded and nothing verified it. Reach and aim are measured on the player's own client, ` +
+       `where other players are interpolated locally and latency shifts what the server saw. Anyone who ` +
+       `recompiles the open-source mod can fabricate a link. Treat it as a readable record of a fight, not as ` +
+       `proof.</div>`;
+
+  document.getElementById('app').innerHTML = h;
+  attachPanZoom();
+}
+
+function attachPanZoom() {
+  document.querySelectorAll('svg.chart').forEach(function (svg) {
+    const vb = svg.getAttribute('viewBox').split(' ').map(Number);
+    const init = vb.slice();
+    let v = { x: vb[0], y: vb[1], w: vb[2], h: vb[3] };
+    const ap = () => svg.setAttribute('viewBox', v.x + ' ' + v.y + ' ' + v.w + ' ' + v.h);
+    svg.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      const r = svg.getBoundingClientRect();
+      const mx = v.x + (e.clientX - r.left) / r.width * v.w;
+      const my = v.y + (e.clientY - r.top) / r.height * v.h;
+      const f = e.deltaY < 0 ? 0.85 : 1 / 0.85;
+      v.w *= f; v.h *= f;
+      v.x = mx - (e.clientX - r.left) / r.width * v.w;
+      v.y = my - (e.clientY - r.top) / r.height * v.h;
+      ap();
+    }, { passive: false });
+    let dragging = false, lx = 0, ly = 0;
+    svg.addEventListener('mousedown', e => { dragging = true; lx = e.clientX; ly = e.clientY; svg.style.cursor = 'grabbing'; });
+    window.addEventListener('mousemove', function (e) {
+      if (!dragging) return;
+      const r = svg.getBoundingClientRect();
+      v.x -= (e.clientX - lx) / r.width * v.w;
+      v.y -= (e.clientY - ly) / r.height * v.h;
+      lx = e.clientX; ly = e.clientY; ap();
+    });
+    window.addEventListener('mouseup', () => { dragging = false; svg.style.cursor = 'grab'; });
+    svg.addEventListener('dblclick', () => { v = { x: init[0], y: init[1], w: init[2], h: init[3] }; ap(); });
+  });
+}
+
+function showMessage(title, body) {
+  document.getElementById('app').innerHTML =
+    `<h1>${esc(title)}</h1><div class="sub" id="empty">${body}</div>`;
+}
+
+async function boot() {
+  const frag = location.hash.replace(/^#/, '').trim();
+  if (!frag) {
+    showMessage('Combat Tracker', 'This page renders a Combat Tracker session that is carried entirely inside ' +
+      'the link &mdash; there is no server and nothing is stored here. Open a session link to view it, or grab ' +
+      'the mod from <a href="https://github.com/reeeeman1/Combat-Tracker" style="color:#29b6f6">GitHub</a> and ' +
+      'record your own with <code>Stop Recording</code>.');
+    return;
+  }
+  if (typeof DecompressionStream === 'undefined') {
+    showMessage('Unsupported browser', 'This page needs <code>DecompressionStream</code> to unpack the session. ' +
+      'Any current Chrome, Edge, Firefox or Safari has it.');
+    return;
+  }
+  try {
+    render(decode(await inflateRaw(b64urlToBytes(frag))));
+  } catch (err) {
+    showMessage('Could not read this link', 'The session data appears truncated or corrupted &mdash; chat clients ' +
+      'sometimes cut long links in half. Ask for it again as a full copy-paste.<br><br><code>' +
+      esc(err && err.message ? err.message : String(err)) + '</code>');
+  }
+}
+
+window.addEventListener('hashchange', boot);
+boot();
+</script>
+</body>
+</html>

@@ -5,6 +5,7 @@
 	"client": [
 		"LivingEntityMixin",
 		"MultiPlayerGameModeMixin",
+		"MinecraftMixin",
 		"GuiMixin"
 	],
 	"injectors": {

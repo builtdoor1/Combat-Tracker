@@ -37,16 +37,23 @@ public class CtConfig {
     /** Index into the HUD accent-color theme list. */
     public int hudThemeIndex = 0;
 
-    // ── Detection tuning (advanced; edit in config.json) ──────────────────────
-    /** Minimum horizontal speed just after damage to treat it as a real combat hit
-     *  (filters fall / fire / poison, which have no horizontal knockback). */
-    public double knockbackThreshold = 0.065;
-    /** Ticks after a grounded hit during which a jump still counts as an attempt. */
-    public int windowTicksGround = 6;
-    /** Ticks after an airborne hit during which a jump still counts as an attempt. */
-    public int windowTicksAir = 10;
-    /** Fraction of round-trip ping treated as one-way latency for hit-time compensation. */
-    public double pingCompFactor = 0.5;
+    // ── Sharing ───────────────────────────────────────────────────────────────
+    /**
+     * Base URL of the session viewer. The session itself rides in the URL fragment,
+     * so this host only ever serves the static viewer page and never receives any
+     * session data. Configurable so a fork can point at its own copy.
+     */
+    public String shareBaseUrl = "https://reeeeman1.github.io/Combat-Tracker/";
+
+    // Detection tuning is deliberately NOT configurable. The knockback threshold and
+    // the post-hit tick windows live as constants in
+    // {@link combat_tracker.detection.JumpResetTracker}, and one-way latency is
+    // measured automatically by {@link combat_tracker.detection.LatencyEstimator}.
+    // These were never preferences — a "wrong" value silently corrupts the very
+    // statistics the mod exists to defend, and a report is only worth something if
+    // every copy of the mod measured the same way. Older config.json files may still
+    // carry the removed keys; Gson ignores unknown fields, so they load fine and are
+    // dropped on the next save.
 
     public static CtConfig get() {
         if (instance == null) {
