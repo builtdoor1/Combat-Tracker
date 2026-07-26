@@ -75,7 +75,9 @@ async function inflateRaw(bytes) {
 function decode(raw) {
   const r = new Reader(raw);
   const version = r.u8();
-  if (version !== 1) throw new Error('This link uses format version ' + version + ', which this page cannot read yet.');
+  if (version < 1 || version > 2) {
+    throw new Error('This link uses format version ' + version + ', which this page cannot read yet.');
+  }
 
   const d = { version };
   d.player = r.str();
@@ -90,6 +92,11 @@ function decode(raw) {
 
   d.jumpAttempts = r.varLong(); d.jumpHits = r.varLong();
   d.jumpAvgMs = r.cent();       d.jumpSdMs = r.cent();
+  if (version >= 2) {
+    d.pingMs = r.varLong();
+    d.hitAvgMs = r.cent(); d.hitSdMs = r.cent();
+    d.hitMinMs = r.zig();  d.hitMaxMs = r.zig();
+  }
   d.combos = r.varLong();       d.comboIntervals = r.varLong();
   d.comboAvgMs = r.cent();      d.comboJitterMs = r.cent();
   d.swings = r.varLong();       d.swingHits = r.varLong();
@@ -126,6 +133,22 @@ function decode(raw) {
     const packed = r.varLong();
     d.swingList.push({ t, reach, aimDeg, offX, offY, hit: packed % 2 === 1, target: Math.floor(packed / 2) - 1 });
   }
+
+  // v1 links carry no successful-reset summary. Derive it from the plotted hits so
+  // old links still get the chart — approximate, and labelled as such below.
+  if (version < 2) {
+    const hits = d.jumps.filter(j => j.code === 0).map(j => j.delta);
+    d.pingMs = null;
+    d.derivedHitStats = true;
+    if (hits.length) {
+      const mean = hits.reduce((a, b) => a + b, 0) / hits.length;
+      const varr = hits.reduce((a, b) => a + (b - mean) * (b - mean), 0) / hits.length;
+      d.hitAvgMs = mean; d.hitSdMs = Math.sqrt(varr);
+      d.hitMinMs = Math.min(...hits); d.hitMaxMs = Math.max(...hits);
+    } else {
+      d.hitAvgMs = 0; d.hitSdMs = 0; d.hitMinMs = 0; d.hitMaxMs = 0;
+    }
+  }
   return d;
 }
 
@@ -149,15 +172,31 @@ function noData(w, h) {
   return `<text x="${w / 2}" y="${h / 2}" fill="#5f6772" font-size="13" text-anchor="middle" ` +
          `font-family="sans-serif">no data recorded</text></svg>`;
 }
-function axes(yMin, yMax) {
+// Gridlines on round values, sized to the range. Milliseconds are the point of
+// these charts, so three lines at min/mid/max isn't enough to read a value off.
+function niceStep(range, targetLines) {
+  const raw = Math.max(1e-9, range / Math.max(1, targetLines));
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10;
+  return step * mag;
+}
+function axes(yMin, yMax, unit) {
   let s = `<line x1="${ML}" y1="${MT}" x2="${ML}" y2="${MT + PH}" stroke="#2a2f37"/>` +
           `<line x1="${ML}" y1="${MT + PH}" x2="${ML + PW}" y2="${MT + PH}" stroke="#2a2f37"/>`;
-  for (let i = 0; i <= 2; i++) {
-    const val = yMin + (yMax - yMin) * i / 2;
+  const step = niceStep(yMax - yMin, 6);
+  const label = v => step >= 1 ? String(Math.round(v)) : (step >= 0.1 ? v.toFixed(1) : v.toFixed(2));
+  for (let val = Math.ceil(yMin / step) * step; val <= yMax + step * 0.001; val += step) {
     const yy = MT + PH - (val - yMin) / (yMax - yMin) * PH;
-    s += `<line x1="${ML - 3}" y1="${yy}" x2="${ML + PW}" y2="${yy}" stroke="#21262e"/>` +
+    if (yy < MT || yy > MT + PH) continue;
+    const zero = Math.abs(val) < step * 0.001;
+    s += `<line x1="${ML - 3}" y1="${yy}" x2="${ML + PW}" y2="${yy}" stroke="${zero ? '#3a424d' : '#21262e'}"/>` +
          `<text x="${ML - 6}" y="${yy + 3}" fill="#6b7480" font-size="10" text-anchor="end" ` +
-         `font-family="sans-serif">${Math.abs(val) >= 10 ? Math.round(val) : f2(val)}</text>`;
+         `font-family="sans-serif">${label(val)}</text>`;
+  }
+  if (unit) {
+    s += `<text x="${ML - 6}" y="${MT - 8}" fill="#4a5561" font-size="9" text-anchor="end" ` +
+         `font-family="sans-serif">${esc(unit)}</text>`;
   }
   return s;
 }
@@ -175,7 +214,7 @@ function seriesChart(title, pts, d, opts) {
   for (const p of pts) { yMax = Math.max(yMax, opts.value(p)); yMin = Math.min(yMin, opts.value(p)); }
   yMax = yMax * 1.12 + (opts.pad || 0);
   const span = Math.max(1, d.endEpochMs - d.startEpochMs);
-  s += axes(yMin, yMax);
+  s += axes(yMin, yMax, opts.unit);
 
   if (opts.refLine) {
     const ry = MT + PH - (opts.refLine - yMin) / (yMax - yMin) * PH;
@@ -196,6 +235,33 @@ function seriesChart(title, pts, d, opts) {
          `stroke-opacity="0.35" stroke-width="1"/>`;
   }
   return s + dots + '</svg>';
+}
+
+// Successful resets only, axis fitted to the data rather than to zero — a few
+// milliseconds of spread has to be visible or the chart says nothing.
+function hitsChart(d) {
+  const hits = d.jumps.filter(j => j.code === 0);
+  let s = svgOpen(W, H) + chartTitle('Successful jump-reset timing (ms)');
+  if (!hits.length) return s + noData(W, H);
+
+  const lo = d.hitMinMs, hi = d.hitMaxMs;
+  const pad = Math.max(2, (hi - lo) * 0.15);
+  const yMin = lo - pad, yMax = hi + pad;
+  const span = Math.max(1, d.endEpochMs - d.startEpochMs);
+  s += axes(yMin, yMax, 'ms');
+
+  const meanY = MT + PH - (d.hitAvgMs - yMin) / (yMax - yMin) * PH;
+  s += `<line x1="${ML}" y1="${meanY.toFixed(1)}" x2="${ML + PW}" y2="${meanY.toFixed(1)}" stroke="#9fb3c8" ` +
+       `stroke-width="1" stroke-dasharray="3 3" stroke-opacity="0.7"/>` +
+       `<text x="${ML + PW}" y="${(meanY - 4).toFixed(1)}" fill="#9fb3c8" font-size="10" text-anchor="end" ` +
+       `font-family="sans-serif">mean ${f2(d.hitAvgMs)} ms</text>`;
+
+  for (const j of hits) {
+    const x = ML + (j.t - d.startEpochMs) / span * PW;
+    const y = MT + PH - (j.delta - yMin) / (yMax - yMin) * PH;
+    s += dot(x, y, HIT, `${tOff(j.t - d.startEpochMs)} : ${j.delta} ms`);
+  }
+  return s + '</svg>';
 }
 
 function aimScatter(d) {
@@ -252,16 +318,32 @@ function render(d) {
   if (d.opponents.length) {
     h += `<div class="vs">vs ${d.opponents.map(o => head(o, 24) + ' ' + esc(o)).join(' &nbsp; ')}</div>`;
   }
-  h += `<div class="sub">${esc(started)} &middot; ${Math.floor(dur / 60)}m ${dur % 60}s &middot; ` +
-       `charts: scroll to zoom, drag to pan, double-click to reset.</div>`;
+  h += `<div class="sub">${esc(started)} &middot; ${Math.floor(dur / 60)}m ${dur % 60}s` +
+       (d.pingMs != null ? ` &middot; ${Math.round(d.pingMs)} ms ping` : '') +
+       ` &middot; charts: scroll to zoom, drag to pan, double-click to reset.</div>`;
 
-  h += `<h2>Jump resets</h2><div class="cards">` +
+  h += `<h2>Jump resets &mdash; successful</h2><div class="cards">` +
+       card(d.jumpHits, 'hits') + card(f2(d.hitAvgMs) + ' ms', 'avg') +
+       card(f2(d.hitSdMs) + ' ms', 'std dev') +
+       card(d.hitMinMs + ' &ndash; ' + d.hitMaxMs + ' ms', 'range') + `</div>`;
+  h += `<div class="sub">Only the resets that landed inside the success window, on an axis scaled to them alone ` +
+       `&mdash; misses run hundreds of milliseconds out and would otherwise flatten this into a line. ` +
+       `<b>The scatter here is the evidence</b>: a human's timing wanders, an auto-reset repeats the same few ` +
+       `milliseconds.</div>`;
+  if (d.derivedHitStats) {
+    h += `<div class="thin">This link predates the successful-reset summary, so these four figures are derived ` +
+         `from the plotted points rather than from every attempt. Re-record for exact ones.</div>`;
+  }
+  h += hitsChart(d);
+
+  h += `<h2>Jump resets &mdash; every attempt</h2><div class="cards">` +
        card(d.jumpAttempts, 'attempts') + card(d.jumpHits, 'hits') +
        card(d.jumpAttempts - d.jumpHits, 'misses') +
        card(f2(d.jumpAvgMs) + ' ms', 'avg delta') + card(f2(d.jumpSdMs) + ' ms', 'std dev') + `</div>`;
+  h += `<div class="sub">The full picture including misses, so nothing is hidden by the chart above.</div>`;
   h += thinNote(d.jumps.length, d.jumpTotal, 'attempts');
   h += seriesChart('Jump-reset delta over time (ms)', d.jumps, d, {
-    value: p => p.delta, color: p => p.code === 0 ? HIT : MISS,
+    value: p => p.delta, color: p => p.code === 0 ? HIT : MISS, unit: 'ms',
     tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${p.delta} ms (${['SUCCESS', 'TOO_EARLY', 'TOO_LATE'][p.code]})`,
   });
 
@@ -272,7 +354,7 @@ function render(d) {
        `combo shows wider spread.</div>`;
   h += thinNote(d.comboList.length, d.comboTotal, 'intervals');
   h += seriesChart('Combo inter-hit interval over time (ms)', d.comboList, d, {
-    value: p => p.interval, color: () => COMBO, lineColor: COMBO,
+    value: p => p.interval, color: () => COMBO, lineColor: COMBO, unit: 'ms',
     tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${p.interval} ms`,
   });
 
@@ -280,11 +362,13 @@ function render(d) {
        card(d.swings, 'swings') + card(d.swingHits, 'landed') + card(d.swings - d.swingHits, 'whiffed') +
        card(f2(d.reachAvg) + ' b', 'avg reach') + card(f2(d.reachMax) + ' b', 'max reach') +
        card(f2(d.reachSd) + ' b', 'std dev') + `</div>`;
-  h += `<div class="sub">Distance from the player's eyes to the target's hitbox on every swing. Green landed, ` +
-       `red whiffed. The dashed line is vanilla melee range (3.0 blocks).</div>`;
+  h += `<div class="sub">Distance from the player's eyes to the <b>nearest point</b> of the target's hitbox ` +
+       `&mdash; the same quantity vanilla checks in <code>isWithinEntityInteractionRange</code>. Green landed, ` +
+       `red whiffed. The dashed line is vanilla melee range (3.0 blocks); landed hits should sit at or below it, ` +
+       `while whiffs can exceed it because they were thrown from too far away.</div>`;
   h += thinNote(d.swingList.length, d.swingTotal, 'swings');
   h += seriesChart('Reach per swing (blocks)', d.swingList, d, {
-    value: p => p.reach, color: p => p.hit ? HIT : MISS, line: false,
+    value: p => p.reach, color: p => p.hit ? HIT : MISS, line: false, unit: 'blocks',
     baseMax: VANILLA_REACH, refLine: VANILLA_REACH, refLabel: 'vanilla 3.0',
     tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${f2(p.reach)} blocks ${p.hit ? '(landed)' : '(whiffed)'}` +
                     (p.target >= 0 && dd.opponents[p.target] ? ' vs ' + dd.opponents[p.target] : ''),

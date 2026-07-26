@@ -30,8 +30,14 @@ import java.util.zip.Deflater;
  * keep decoding old ones, so it must never be dropped.</p>
  */
 public final class SharePayload {
-    /** Bump only for an incompatible layout change; the viewer decodes each version. */
-    private static final int FORMAT_VERSION = 1;
+    /**
+     * Bump only for an incompatible layout change; the viewer decodes each version.
+     *
+     * <p>v2 added median ping and the successful-reset summary. v1 links stay
+     * readable — the viewer branches on this byte, which is the whole reason it is
+     * written first.</p>
+     */
+    private static final int FORMAT_VERSION = 2;
 
     /** Leaves room for surrounding text in a 2000-character Discord message. */
     public static final int DEFAULT_MAX_CHARS = 1800;
@@ -122,6 +128,12 @@ public final class SharePayload {
         b.varInt(d.jumpHits);
         b.cent(d.jumpAvgMs);
         b.cent(d.jumpSdMs);
+        // v2 additions
+        b.varInt((int) Math.round(Math.max(0, d.pingMs)));
+        b.cent(d.hitAvgMs);
+        b.cent(d.hitSdMs);
+        b.zig(d.hitMinMs);
+        b.zig(d.hitMaxMs);
         b.varInt(d.combos);
         b.varInt(d.comboIntervals);
         b.cent(d.comboAvgMs);

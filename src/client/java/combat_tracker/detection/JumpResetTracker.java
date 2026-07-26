@@ -22,8 +22,10 @@ import net.minecraft.network.chat.Component;
  *   <li><b>Hit</b> is detected client-side: {@code hurtTime} goes 0→+ while the
  *       invulnerability (regen) timer is active <em>and</em> horizontal knockback
  *       exceeds a threshold (filters fall / fire / poison).</li>
- *   <li>Hit and jump are paired through a short tick window. Timing uses
- *       {@link System#nanoTime()} with one-way ping compensation.</li>
+ *   <li>Hit and jump are paired through a short tick window, timed with
+ *       {@link System#nanoTime()}. Both are observed on this client's own clock
+ *       and latency delays both equally, so no ping compensation is applied —
+ *       see {@link #handleHit}.</li>
  * </ol>
  *
  * <p>Only attempts where the player actually jumped are recorded.</p>
@@ -70,7 +72,7 @@ public class JumpResetTracker {
     private long hitNano = 0L;
     private boolean hitWasGrounded = true;
 
-    private final LatencyEstimator latency = new LatencyEstimator();
+    private final LatencyEstimator latency = LatencyEstimator.get();
 
     // Per-tick carry-overs
     private int prevHurtTime = 0;
@@ -134,17 +136,26 @@ public class JumpResetTracker {
 
     private void handleHit(long tickNano) {
         // Use the precise hit time from the mixin; fall back to the tick time.
-        // The hit reaches us one-way-latency late, so wind the timestamp back by
-        // the automatically estimated one-way time.
-        long base = CombatTrackerClient.hitNano != 0L ? CombatTrackerClient.hitNano : tickNano;
-        long compHitNano = base - (long) (latency.oneWayMs() * 1_000_000.0);
+        //
+        // NO latency compensation, deliberately. An earlier version wound this
+        // timestamp back by the estimated one-way latency, which is wrong: the jump
+        // is timed on the client clock, so subtracting latency from only the hit
+        // mixes a server-frame time with a client-frame one and adds a flat bias of
+        // half the ping to every result. At 120ms that is +60ms — most of the
+        // success window — so real resets scored as TOO_LATE.
+        //
+        // Both events are observed on this client's own tick clock, and latency
+        // delays both equally, so it cancels out on its own. Knockback is applied
+        // when the client receives it, which is the same moment hurtTime flips, so
+        // the physics being measured are local too.
+        long hitAtNano = CombatTrackerClient.hitNano != 0L ? CombatTrackerClient.hitNano : tickNano;
 
         int ticksSinceJump = currentTick - lastJumpTick;
 
         // A real jump on this tick (same-tick reset) or 1–2 ticks before the hit:
         // pair them and use the actual signed sub-tick delta (jump − hit).
         if (ticksSinceJump >= 0 && ticksSinceJump <= JUMP_LOOKBACK_TICKS && readyForResult()) {
-            registerAttempt((lastJumpNano - compHitNano) / 1_000_000.0);
+            registerAttempt((lastJumpNano - hitAtNano) / 1_000_000.0);
             state = State.IDLE;
             return;
         }
@@ -152,11 +163,11 @@ public class JumpResetTracker {
         // NORMAL: open (or restart) a timing window for an upcoming jump.
         if (state == State.WINDOW_ACTIVE) {
             hitTick = currentTick;
-            hitNano = compHitNano;
+            hitNano = hitAtNano;
             hitWasGrounded = prevOnGround;
         } else if (state == State.IDLE && readyForResult()) {
             hitTick = currentTick;
-            hitNano = compHitNano;
+            hitNano = hitAtNano;
             hitWasGrounded = prevOnGround;
             state = State.WINDOW_ACTIVE;
         }

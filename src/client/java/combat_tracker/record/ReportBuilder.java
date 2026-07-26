@@ -59,6 +59,8 @@ public final class ReportBuilder {
         long durS = Math.max(0, (d.endEpochMs - d.startEpochMs) / 1000);
         s.append("<tr><th>Duration</th><td>").append(durS / 60).append("m ").append(durS % 60).append("s</td></tr>");
         s.append("<tr><th>Player UUID</th><td>").append(esc(d.playerUuid)).append("</td></tr>");
+        s.append("<tr><th>Ping (median)</th><td>").append(Math.round(d.pingMs))
+                .append(" ms <span class=\"sub\">(recorded for context; it adjusts no measurement)</span></td></tr>");
         if (!d.opponents.isEmpty()) {
             s.append("<tr><th>Opponents</th><td>").append(esc(String.join(", ", d.opponents))).append("</td></tr>");
         }
@@ -66,14 +68,72 @@ public final class ReportBuilder {
     }
 
     private static void jumpSection(StringBuilder s, SessionData d) {
-        s.append("<h2>Jump resets</h2><div class=\"cards\">");
+        s.append("<h2>Jump resets &mdash; successful</h2><div class=\"cards\">");
+        card(s, Integer.toString(d.jumpHits), "hits");
+        card(s, fmt(d.hitAvgMs) + " ms", "avg");
+        card(s, fmt(d.hitSdMs) + " ms", "std dev");
+        card(s, d.hitMinMs + " &ndash; " + d.hitMaxMs + " ms", "range");
+        s.append("</div>");
+        s.append("<div class=\"sub\">Only the resets that landed inside the success window, on an axis scaled to "
+                + "them alone &mdash; misses run hundreds of milliseconds out and would otherwise flatten this into "
+                + "a line. <b>The scatter here is the evidence</b>: a human's timing wanders, an auto-reset repeats "
+                + "the same few milliseconds.</div>");
+        s.append(hitsChart(d));
+
+        s.append("<h2>Jump resets &mdash; every attempt</h2><div class=\"cards\">");
         card(s, Integer.toString(d.jumpAttempts), "attempts");
         card(s, Integer.toString(d.jumpHits), "hits");
         card(s, Integer.toString(d.jumpMisses), "misses");
         card(s, fmt(d.jumpAvgMs) + " ms", "avg delta");
         card(s, fmt(d.jumpSdMs) + " ms", "std dev");
         s.append("</div>");
+        s.append("<div class=\"sub\">The full picture including misses, so nothing is hidden by the chart above.</div>");
         s.append(timeChart("Jump-reset delta over time (ms)", d.jumpEvents, d.startEpochMs, d.endEpochMs));
+    }
+
+    /**
+     * Successful resets only, with the axis fitted to the data rather than to zero.
+     * A few milliseconds of spread has to be visible here or the chart says nothing.
+     */
+    private static String hitsChart(SessionData d) {
+        List<SessionData.JEvent> hits = new java.util.ArrayList<>();
+        for (SessionData.JEvent j : d.jumpEvents) {
+            if ("SUCCESS".equals(j.result)) {
+                hits.add(j);
+            }
+        }
+        StringBuilder s = svgOpen(W, H);
+        title(s, "Successful jump-reset timing (ms)");
+        if (hits.isEmpty()) {
+            return noData(s);
+        }
+
+        double lo = d.hitMinMs, hi = d.hitMaxMs;
+        // Guarantee a few milliseconds of visible span even if every hit is identical.
+        double pad = Math.max(2.0, (hi - lo) * 0.15);
+        double yMin = lo - pad, yMax = hi + pad;
+        long span = Math.max(1, d.endEpochMs - d.startEpochMs);
+        axes(s, yMin, yMax, "ms");
+
+        int pw = W - ML - MR, ph = H - MT - MB;
+
+        // Mean line: the spread around it is what a reader should be looking at.
+        int meanY = (int) (MT + ph - (d.hitAvgMs - yMin) / (yMax - yMin) * ph);
+        s.append("<line x1=\"").append(ML).append("\" y1=\"").append(meanY).append("\" x2=\"").append(ML + pw)
+                .append("\" y2=\"").append(meanY)
+                .append("\" stroke=\"#9fb3c8\" stroke-width=\"1\" stroke-dasharray=\"3 3\" stroke-opacity=\"0.7\"/>");
+        s.append("<text x=\"").append(ML + pw).append("\" y=\"").append(meanY - 4)
+                .append("\" fill=\"#9fb3c8\" font-size=\"10\" text-anchor=\"end\" font-family=\"sans-serif\">mean ")
+                .append(fmt(d.hitAvgMs)).append(" ms</text>");
+
+        StringBuilder dots = new StringBuilder();
+        for (SessionData.JEvent j : hits) {
+            int x = (int) (ML + (double) (j.t - d.startEpochMs) / span * pw);
+            int y = (int) (MT + ph - (j.deltaMs - yMin) / (yMax - yMin) * ph);
+            dot(dots, x, y, HIT_COLOR, offset(j.t - d.startEpochMs) + " : " + j.deltaMs + " ms");
+        }
+        s.append(dots).append("</svg>");
+        return s.toString();
     }
 
     private static void comboSection(StringBuilder s, SessionData d) {
@@ -97,9 +157,12 @@ public final class ReportBuilder {
         card(s, fmt(d.reachMaxBlocks) + " b", "max reach");
         card(s, fmt(d.reachSdBlocks) + " b", "std dev");
         s.append("</div>");
-        s.append("<div class=\"sub\">Distance from your eyes to the target's hitbox on every swing. Green landed, "
-                + "red whiffed. The dashed line is vanilla melee range (3.0 blocks) &mdash; consistently landing "
-                + "hits well beyond it is what a reach cheat looks like.</div>");
+        s.append("<div class=\"sub\">Distance from your eyes to the <b>nearest point</b> of the target's hitbox on "
+                + "every swing &mdash; the same quantity vanilla itself checks in "
+                + "<code>isWithinEntityInteractionRange</code>, and what server anti-cheats measure. Green landed, "
+                + "red whiffed. The dashed line is vanilla melee range (3.0 blocks); landed hits should sit at or "
+                + "below it. Whiffs can legitimately exceed it &mdash; that is a swing thrown from too far away, "
+                + "attributed to the player nearest your crosshair.</div>");
         s.append(reachChart(d));
     }
 
@@ -152,7 +215,7 @@ public final class ReportBuilder {
         }
         yMax = yMax * 1.1 + 1;
         long span = Math.max(1, endMs - startMs);
-        axes(s, yMin, yMax);
+        axes(s, yMin, yMax, "ms");
 
         int pw = W - ML - MR, ph = H - MT - MB;
         StringBuilder poly = new StringBuilder();
@@ -184,7 +247,7 @@ public final class ReportBuilder {
         }
         yMax = yMax * 1.1 + 1;
         long span = Math.max(1, d.endEpochMs - d.startEpochMs);
-        axes(s, yMin, yMax);
+        axes(s, yMin, yMax, "ms");
 
         int pw = W - ML - MR, ph = H - MT - MB;
         StringBuilder poly = new StringBuilder();
@@ -213,7 +276,7 @@ public final class ReportBuilder {
         }
         yMax = yMax * 1.15;
         long span = Math.max(1, d.endEpochMs - d.startEpochMs);
-        axes(s, 0, yMax);
+        axes(s, 0, yMax, "blocks");
 
         int pw = W - ML - MR, ph = H - MT - MB;
 
@@ -321,21 +384,62 @@ public final class ReportBuilder {
         return s.toString();
     }
 
-    private static void axes(StringBuilder s, double yMin, double yMax) {
+    /**
+     * Y axis with gridlines on round values.
+     *
+     * <p>The old version drew exactly three lines at min/mid/max, which on a
+     * millisecond axis produced labels like "37" and left a reader guessing at
+     * everything between them. Milliseconds are the whole point of these charts,
+     * so this picks a round step (1, 2, 2.5, 5, 10, ...) sized to the range and
+     * labels every line.</p>
+     */
+    private static void axes(StringBuilder s, double yMin, double yMax, String unit) {
         int pw = W - ML - MR, ph = H - MT - MB;
         s.append("<line x1=\"").append(ML).append("\" y1=\"").append(MT).append("\" x2=\"").append(ML)
                 .append("\" y2=\"").append(MT + ph).append("\" stroke=\"#2a2f37\"/>");
         s.append("<line x1=\"").append(ML).append("\" y1=\"").append(MT + ph).append("\" x2=\"").append(ML + pw)
                 .append("\" y2=\"").append(MT + ph).append("\" stroke=\"#2a2f37\"/>");
-        for (int i = 0; i <= 2; i++) {
-            double val = yMin + (yMax - yMin) * i / 2.0;
+
+        double step = niceStep(yMax - yMin, 6);
+        double first = Math.ceil(yMin / step) * step;
+        for (double val = first; val <= yMax + step * 0.001; val += step) {
             int yy = (int) (MT + ph - (val - yMin) / (yMax - yMin) * ph);
+            if (yy < MT || yy > MT + ph) {
+                continue;
+            }
+            boolean zero = Math.abs(val) < step * 0.001;
             s.append("<line x1=\"").append(ML - 3).append("\" y1=\"").append(yy).append("\" x2=\"").append(ML + pw)
-                    .append("\" y2=\"").append(yy).append("\" stroke=\"#21262e\"/>");
+                    .append("\" y2=\"").append(yy).append("\" stroke=\"").append(zero ? "#3a424d" : "#21262e")
+                    .append("\"/>");
             s.append("<text x=\"").append(ML - 6).append("\" y=\"").append(yy + 3)
                     .append("\" fill=\"#6b7480\" font-size=\"10\" text-anchor=\"end\" font-family=\"sans-serif\">")
-                    .append(tick(val)).append("</text>");
+                    .append(tick(val, step)).append("</text>");
         }
+        if (unit != null) {
+            s.append("<text x=\"").append(ML - 6).append("\" y=\"").append(MT - 8)
+                    .append("\" fill=\"#4a5561\" font-size=\"9\" text-anchor=\"end\" font-family=\"sans-serif\">")
+                    .append(esc(unit)).append("</text>");
+        }
+    }
+
+    /** Rounds a raw axis step up to the nearest 1 / 2 / 2.5 / 5 / 10 x power of ten. */
+    private static double niceStep(double range, int targetLines) {
+        double raw = Math.max(1.0e-9, range / Math.max(1, targetLines));
+        double mag = Math.pow(10, Math.floor(Math.log10(raw)));
+        double norm = raw / mag;
+        double step;
+        if (norm <= 1.0) {
+            step = 1.0;
+        } else if (norm <= 2.0) {
+            step = 2.0;
+        } else if (norm <= 2.5) {
+            step = 2.5;
+        } else if (norm <= 5.0) {
+            step = 5.0;
+        } else {
+            step = 10.0;
+        }
+        return step * mag;
     }
 
     private static void dot(StringBuilder s, int x, int y, int color, String tip) {
@@ -389,8 +493,12 @@ public final class ReportBuilder {
         return "+" + (ms / 1000) + "." + String.format("%03d", Math.abs(ms % 1000)) + "s";
     }
 
-    private static String tick(double v) {
-        return Math.abs(v) >= 10 ? Long.toString(Math.round(v)) : fmt(v);
+    /** Label with just enough decimals for the step to read distinctly. */
+    private static String tick(double v, double step) {
+        if (step >= 1.0) {
+            return Long.toString(Math.round(v));
+        }
+        return step >= 0.1 ? String.format("%.1f", v) : String.format("%.2f", v);
     }
 
     private static String hex(int rgb) {

@@ -196,6 +196,9 @@ public class SessionRecorder {
         d.comboEvents = new ArrayList<>(combos);
         d.swingEvents = new ArrayList<>(swings);
         d.opponents = new ArrayList<>(opponents);
+        // Context only — latency adjusts no measurement, but a reader deserves to
+        // know whether a session was played on 30ms or 250ms.
+        d.pingMs = combat_tracker.detection.LatencyEstimator.get().roundTripMs();
         SessionStats.summarise(d);
         return d;
     }

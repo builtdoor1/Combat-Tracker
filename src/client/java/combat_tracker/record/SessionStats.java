@@ -21,12 +21,18 @@ final class SessionStats {
     private static void summariseJumps(SessionData d) {
         int hits = 0;
         double sum = 0, sumSq = 0;
+        double hSum = 0, hSumSq = 0;
+        long hMin = Long.MAX_VALUE, hMax = Long.MIN_VALUE;
         for (SessionData.JEvent j : d.jumpEvents) {
-            if ("SUCCESS".equals(j.result)) {
-                hits++;
-            }
             sum += j.deltaMs;
             sumSq += (double) j.deltaMs * j.deltaMs;
+            if ("SUCCESS".equals(j.result)) {
+                hits++;
+                hSum += j.deltaMs;
+                hSumSq += (double) j.deltaMs * j.deltaMs;
+                hMin = Math.min(hMin, j.deltaMs);
+                hMax = Math.max(hMax, j.deltaMs);
+            }
         }
         int n = d.jumpEvents.size();
         d.jumpAttempts = n;
@@ -34,6 +40,13 @@ final class SessionStats {
         d.jumpMisses = n - hits;
         d.jumpAvgMs = n == 0 ? 0 : sum / n;
         d.jumpSdMs = stdDev(sum, sumSq, n);
+
+        // Spread across the successful resets alone is the human-versus-bot signal;
+        // mixing in misses inflates it and hides what it is meant to show.
+        d.hitAvgMs = hits == 0 ? 0 : hSum / hits;
+        d.hitSdMs = stdDev(hSum, hSumSq, hits);
+        d.hitMinMs = hits == 0 ? 0 : hMin;
+        d.hitMaxMs = hits == 0 ? 0 : hMax;
     }
 
     private static void summariseCombos(SessionData d) {

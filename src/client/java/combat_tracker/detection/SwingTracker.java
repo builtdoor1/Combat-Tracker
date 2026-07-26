@@ -10,8 +10,6 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
-import java.util.Optional;
-
 /**
  * Measures the geometry of each attack swing: how far away the target was
  * ("reach") and how far the crosshair sat from the middle of their hitbox ("aim").
@@ -32,8 +30,6 @@ public final class SwingTracker {
         return INSTANCE;
     }
 
-    /** How far to trace when looking for the hitbox the crosshair crosses. */
-    private static final double TRACE_DISTANCE = 8.0;
     /** A swing is attributed to the closest player within this range, if any. */
     private static final double CANDIDATE_RANGE = 6.0;
     /**
@@ -56,9 +52,14 @@ public final class SwingTracker {
             return;
         }
 
-        float partial = client.getDeltaTracker().getGameTimeDeltaPartialTick(false);
-        Vec3 eye = self.getEyePosition(partial);
-        Vec3 look = self.getViewVector(partial).normalize();
+        // Tick-aligned eye and view, NOT interpolated to the render frame. Vanilla
+        // validates reach against the tick position (Player.isWithinEntityInteraction
+        // Range calls the no-arg getEyePosition), and the target's bounding box we
+        // measure against is a tick position too. Mixing an interpolated eye with a
+        // tick-position hitbox was silently adding up to a quarter of a block of
+        // error at sprint speed.
+        Vec3 eye = self.getEyePosition();
+        Vec3 look = self.getViewVector(1.0F).normalize();
 
         // A landed hit on a player is unambiguous; otherwise work out who the swing
         // was plainly meant for. No candidate means an air swing at nobody, which
@@ -78,7 +79,7 @@ public final class SwingTracker {
         AABB box = target.getBoundingBox();
         Vec3 centre = box.getCenter();
 
-        double reach = reachTo(eye, look, box);
+        double reach = reachTo(eye, box);
         double aimDeg = angleBetween(look, centre.subtract(eye));
         double[] placement = placementOnHitbox(eye, look, box, centre);
 
@@ -87,17 +88,26 @@ public final class SwingTracker {
     }
 
     /**
-     * Distance from the eye to the target's hitbox — the number the community and
-     * server anti-cheats both mean by "reach". When the crosshair actually crosses
-     * the box we use that entry point; when it misses we fall back to the nearest
-     * point on the box, which is still the distance you were swinging from.
+     * Distance from the eye to the <em>nearest point</em> of the target's hitbox.
+     *
+     * <p>This is the number vanilla itself validates. {@code
+     * Player.isWithinEntityInteractionRange} is exactly:</p>
+     *
+     * <pre>box.distanceToSqr(getEyePosition()) &lt; range * range</pre>
+     *
+     * <p>where {@code range} is the {@code entity_interaction_range} attribute,
+     * 3.0 by default. So it is also what server anti-cheats measure and what the
+     * community means by "reach".</p>
+     *
+     * <p>An earlier version measured to the point where the aim ray <em>crosses</em>
+     * the box instead. That is a different and always-larger quantity — aim at
+     * someone's head from below and the ray enters the box further away than its
+     * nearest corner — which made legitimate vanilla hits report over 3.0 blocks.
+     * Wolren's ReachDisplay draws the same distinction and treats the ray-crossing
+     * as an alternate display mode, not as reach.</p>
      */
-    private static double reachTo(Vec3 eye, Vec3 look, AABB box) {
-        Optional<Vec3> entry = box.clip(eye, eye.add(look.scale(TRACE_DISTANCE)));
-        if (entry.isPresent()) {
-            return eye.distanceTo(entry.get());
-        }
-        return eye.distanceTo(clampToBox(eye, box));
+    private static double reachTo(Vec3 eye, AABB box) {
+        return Math.sqrt(box.distanceToSqr(eye));
     }
 
     /**
@@ -133,14 +143,6 @@ public final class SwingTracker {
         }
         double cos = Math.max(-1.0, Math.min(1.0, look.dot(toTarget.scale(1.0 / len))));
         return Math.toDegrees(Math.acos(cos));
-    }
-
-    /** Nearest point on the box to a position outside it. */
-    private static Vec3 clampToBox(Vec3 p, AABB box) {
-        return new Vec3(
-                Math.max(box.minX, Math.min(box.maxX, p.x)),
-                Math.max(box.minY, Math.min(box.maxY, p.y)),
-                Math.max(box.minZ, Math.min(box.maxZ, p.z)));
     }
 
     /**

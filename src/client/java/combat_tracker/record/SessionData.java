@@ -49,6 +49,18 @@ public final class SessionData {
     public double aimAvgDeg;
     public double aimSdDeg;
 
+    /** Median round-trip ping during the session. Context only — it adjusts nothing. */
+    public double pingMs;
+
+    // ── Successful resets only ───────────────────────────────────────────────
+    // Tracked separately because misses can be hundreds of milliseconds out and
+    // would otherwise stretch the axis until the successes — the numbers that
+    // actually demonstrate human spread — are squashed into a few pixels.
+    public double hitAvgMs;
+    public double hitSdMs;
+    public long hitMinMs;
+    public long hitMaxMs;
+
     /** Names of everyone swung at, referenced by index from {@link SEvent#target}. */
     public List<String> opponents = new ArrayList<>();
 

@@ -34,7 +34,8 @@ Everything is client-side and observational.
 ### Jump resets
 - **Jump** is detected from the real `jumpFromGround()` call via a mixin — so knockback (e.g. a crit while standing still) can never be mistaken for a jump.
 - **Hit** is detected when `hurtTime` goes 0→positive while the regen timer is active **and** horizontal knockback exceeds a threshold (which filters fall/fire/poison).
-- A hit opens a short tick window; the next jump in it is scored. Timing uses `System.nanoTime()`, wound back by **one-way latency** — measured automatically as half the median of your reported ping, so a single lag spike can't skew a result. The signed delta is classed **HIT** (inside the success window), **MISS – too late**, or **MISS – too early**.
+- A hit opens a short tick window; the next jump in it is scored with `System.nanoTime()`. The signed delta is classed **HIT** (inside the success window), **MISS – too late**, or **MISS – too early**.
+- **No ping compensation, deliberately.** Both the hit and the jump are observed on your own client's clock, and latency delays both equally, so it cancels on its own. Earlier versions wound the hit timestamp back by the estimated one-way latency — that mixes a server-frame time with a client-frame one and adds a flat bias of *half your ping* to every result, which is why timings fell apart above ~120ms. Your ping is still recorded on the report, but purely as context; it adjusts nothing.
 
 ### Combos (triggerbot signal)
 - A **combo** is a chain of **≥2 sprint hits** on the *same* player, with no self-damage in between and no gap longer than `maxComboGapMs`.
@@ -44,13 +45,14 @@ Everything is client-side and observational.
 
 ### Reach & aim
 - Every left-click attack is caught at `startAttack()` — **including the ones that miss**, which the attack method never sees. Vanilla's own guards are re-checked so clicks it discards (post-whiff cooldown, hands busy) don't enter the data.
-- **Reach** is eye-to-hitbox distance: the point where your aim ray crosses the target's box, or the nearest point on it when you whiffed. That's the figure the community and server anti-cheats both mean by "reach".
+- **Reach** is the distance from your eye to the **nearest point** of the target's hitbox. That is precisely what vanilla itself checks — `Player.isWithinEntityInteractionRange` is `box.distanceToSqr(getEyePosition()) < range * range`, with `range` being the `entity_interaction_range` attribute (3.0 by default) — so it is also what server anti-cheats measure. Measured on the tick position, not the interpolated render frame, for the same reason.
+  - It is *not* the point where your aim ray crosses the hitbox. That is a different and always-larger number: aim at someone's head from below and the ray enters the box further away than its nearest corner, which makes legitimate vanilla hits read above 3.0. [Wolren's ReachDisplay](https://github.com/Wolren/ReachDisplay) draws the same distinction and treats ray-crossing as an alternate display mode rather than as reach.
 - **Aim** is recorded two ways: the **angle** between your crosshair and the hitbox centre, and **where on the hitbox** the ray passed, plotted as a scatter with the box drawn to scale.
 - A whiff is attributed to the player closest to your crosshair within 6 blocks and 30°. Swinging at empty air near nobody records nothing.
 
 > **These are your client's numbers.** Other players are interpolated locally and the server saw them somewhere slightly different depending on latency, so reach measured here won't match a server-side anti-cheat exactly. The report says so too.
 
-> Jump-reset detection is adapted from the open-source [sombreror/JumpReset-mod](https://github.com/sombreror/JumpReset-mod).
+> Jump-reset detection is adapted from the open-source [sombreror/JumpReset-mod](https://github.com/sombreror/JumpReset-mod). The decision to drop ping compensation follows [sootysplash/jump-reset](https://github.com/sootysplash/jump-reset), which compares tick counts on the client clock and needs no latency correction at all.
 
 ---
 
@@ -101,7 +103,10 @@ When **Chat** is enabled, each jump-reset *attempt* prints one line (green HIT /
 
 Use **Start Recording** in the config screen (or bind the *Start/Stop Recording* key under Controls). While recording, every jump-reset attempt and every combo interval is captured with a timestamp. **Stop Recording** writes two files to `config/combat_tracker/recordings/` and prints the path to chat:
 
-- `session-<timestamp>.html` — a self-contained report you open in any browser: start/end **time signatures**, summary cards, and **four interactive SVG charts** (jump-reset delta, combo interval, reach per swing, and the aim-placement scatter). **Scroll to zoom, drag to pan, double-click to reset** — so you can inspect small jitters. Hover a point for its exact value.
+- `session-<timestamp>.html` — a self-contained report you open in any browser: start/end **time signatures**, summary cards, and **five interactive SVG charts**. **Scroll to zoom, drag to pan, double-click to reset** — so you can inspect small jitters. Hover a point for its exact value.
+  - **Successful jump resets** come first, on an axis fitted to those timings alone. Misses run hundreds of milliseconds out and would otherwise squash every success into a flat line — and a few milliseconds of spread is exactly what proves a human is doing it. A dashed mean line makes the scatter readable at a glance.
+  - Then **every attempt** (nothing hidden), **combo interval**, **reach per swing**, and the **aim-placement scatter**.
+  - Gridlines land on round values sized to the range, so you can read a millisecond value off the axis instead of guessing between min and max.
 - `session-<timestamp>.json` — the canonical data plus the integrity block.
 
 Use **Open recordings folder** in the config screen to jump straight there.

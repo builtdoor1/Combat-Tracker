@@ -33,7 +33,7 @@ public final class ReportPreview {
         int events = args.length > 1 ? Integer.parseInt(args[1]) : 120;
         Files.createDirectories(outDir);
 
-        SessionData d = synthesise(events, 20250726_000000L);
+        SessionData d = synthesise(events, 20250726_000000L, 38.0);
         String canonical = new com.google.gson.GsonBuilder().disableHtmlEscaping().create().toJson(d);
         byte[] bytes = canonical.getBytes(StandardCharsets.UTF_8);
         String sha = IntegrityUtil.sha256Hex(bytes);
@@ -50,12 +50,25 @@ public final class ReportPreview {
         System.out.println("fragment : " + frag.toAbsolutePath() + "  (" + payload.length() + " chars)");
         System.out.println("swings=" + d.swings + " jumps=" + d.jumpAttempts + " combos=" + d.comboIntervals);
 
+        // A consistent player whose successful resets cluster within a few ms. This
+        // is the case the successes-only chart exists for: on a shared 0-80ms axis
+        // this session is a flat line, and the spread that proves a human is doing
+        // it only becomes visible once the axis fits the data.
+        SessionData tight = synthesise(events, 777L, 6.0);
+        String tightCanonical = new com.google.gson.GsonBuilder().disableHtmlEscaping().create().toJson(tight);
+        byte[] tb = tightCanonical.getBytes(StandardCharsets.UTF_8);
+        Path tightHtml = outDir.resolve("preview-report-tight.html");
+        Files.writeString(tightHtml, ReportBuilder.build(tight, IntegrityUtil.sha256Hex(tb),
+                IntegrityUtil.hmacSha256Hex(tb), tightCanonical));
+        System.out.println("tight    : " + tightHtml.toAbsolutePath()
+                + "  hits " + tight.hitMinMs + "-" + tight.hitMaxMs + " ms, sd " + fmt(tight.hitSdMs));
+
         // Size behaviour across session lengths, to confirm downsampling engages
         // and does not throw away more of the graph than the budget requires.
         String base = "https://reeeeman1.github.io/Combat-Tracker/";
         int budget = SharePayload.DEFAULT_MAX_CHARS - base.length() - 1;
         for (int n : new int[]{50, 500, 5000}) {
-            SessionData big = synthesise(n, 1234L);
+            SessionData big = synthesise(n, 1234L, 38.0);
             SharePayload.Result res = SharePayload.encodeWithStats(big, budget);
             int linkLen = base.length() + 1 + res.payload().length();
             System.out.printf("n=%-5d link %4d chars  plotted %d/%d swings  %s%n",
@@ -65,7 +78,10 @@ public final class ReportPreview {
     }
 
     /** Builds a plausible human session: spread timings, scattered aim, sane reach. */
-    static SessionData synthesise(int events, long seed) {
+    static String fmt(double v) { return String.format("%.2f", v); }
+
+    /** @param jumpSpreadMs standard deviation of the jump-reset timings. */
+    static SessionData synthesise(int events, long seed, double jumpSpreadMs) {
         Random rng = new Random(seed);
         long start = Instant.parse("2026-07-26T02:00:00Z").toEpochMilli();
         long end = start + events * 900L;
@@ -80,12 +96,13 @@ public final class ReportPreview {
         d.startUtc = HUMAN.format(Instant.ofEpochMilli(start));
         d.endUtc = HUMAN.format(Instant.ofEpochMilli(end));
         d.opponents = List.of("Notch", "jeb_");
+        d.pingMs = 118;
 
         for (int i = 0; i < events; i++) {
             long t = start + i * 900L + rng.nextInt(120);
 
             // Jump resets: centred a little inside the success window, human spread.
-            long delta = Math.round(45 + rng.nextGaussian() * 38);
+            long delta = Math.round(45 + rng.nextGaussian() * jumpSpreadMs);
             String result = delta < 0 ? "TOO_EARLY" : (delta > 80 ? "TOO_LATE" : "SUCCESS");
             d.jumpEvents.add(new SessionData.JEvent(t, delta, result));
 
@@ -95,12 +112,13 @@ public final class ReportPreview {
                 d.comboEvents.add(new SessionData.CEvent(t, Math.max(80, interval), i % 8 == 0));
             }
 
-            // Swings: mostly landing just inside vanilla range, aim scattered over
-            // the hitbox rather than pinned to its centre.
+            // Swings: reach is eye-to-nearest-hitbox-point, so a landed hit can never
+            // exceed vanilla's 3.0 interaction range. Whiffs are swings thrown from
+            // beyond it, which is exactly why they missed.
             boolean hit = rng.nextDouble() < 0.72;
             double reach = hit
-                    ? 2.1 + rng.nextGaussian() * 0.35
-                    : 3.1 + Math.abs(rng.nextGaussian()) * 0.5;
+                    ? Math.min(3.0, 2.2 + rng.nextGaussian() * 0.35)
+                    : 3.0 + Math.abs(rng.nextGaussian()) * 0.6;
             reach = Math.max(0.4, Math.min(5.5, reach));
             double offX = rng.nextGaussian() * 0.16;
             double offY = rng.nextGaussian() * 0.42;

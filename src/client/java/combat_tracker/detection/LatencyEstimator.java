@@ -14,12 +14,22 @@ import net.minecraft.client.multiplayer.PlayerInfo;
  * land next.</p>
  *
  * <p>So samples are kept in a small ring and reduced with a <b>median</b>, which
- * ignores those spikes entirely rather than averaging them in. One-way latency is
- * then half the round trip. That halving used to be a user-facing "ping
- * compensation" slider; it was never a preference, just the definition of one-way
- * latency, so it is derived here instead.</p>
+ * ignores those spikes entirely rather than averaging them in.</p>
+ *
+ * <p><b>This no longer adjusts any timing.</b> It used to wind hit timestamps back
+ * by the estimated one-way latency, which added a flat bias of half the ping to
+ * every jump-reset result — see {@link JumpResetTracker#handleHit}. It is kept
+ * only to record what the connection was like during a session, which is useful
+ * context on a report and costs nothing to measure.</p>
  */
 public final class LatencyEstimator {
+    private static final LatencyEstimator INSTANCE = new LatencyEstimator();
+
+    /** Shared instance; sampled by the tracker, read by the session recorder. */
+    public static LatencyEstimator get() {
+        return INSTANCE;
+    }
+
     /** ~20s of history at the server's once-per-second update rate. */
     private static final int SAMPLES = 20;
     /** Assumed round-trip before the server has reported anything. */
