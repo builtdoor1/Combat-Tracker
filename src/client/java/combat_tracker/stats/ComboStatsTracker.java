@@ -1,4 +1,4 @@
-package jump_reset_tracker.stats;
+package combat_tracker.stats;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -18,10 +18,10 @@ import java.util.List;
  * triggerbot tell — automated clicks land on a near-constant cadence, whereas a
  * human combo has natural spread.
  *
- * <p>Persisted as JSON in {@code config/jump_reset_tracker/combo_stats.json}.</p>
+ * <p>Persisted as JSON in {@code config/combat_tracker/combo_stats.json}.</p>
  */
 public class ComboStatsTracker {
-    private static final Logger LOGGER = LoggerFactory.getLogger("jump_reset_tracker/combo");
+    private static final Logger LOGGER = LoggerFactory.getLogger("combat_tracker/combo");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static ComboStatsTracker instance;
@@ -44,7 +44,7 @@ public class ComboStatsTracker {
 
     private static Path file() {
         return FabricLoader.getInstance().getConfigDir()
-                .resolve("jump_reset_tracker")
+                .resolve("combat_tracker")
                 .resolve("combo_stats.json");
     }
 

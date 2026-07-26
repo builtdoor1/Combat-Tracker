@@ -10,4 +10,4 @@ pluginManagement {
 }
 
 // Should match your modid
-rootProject.name = 'jump-reset-tracker'
+rootProject.name = 'combat-tracker'

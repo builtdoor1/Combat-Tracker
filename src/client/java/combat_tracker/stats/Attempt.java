@@ -1,4 +1,4 @@
-package jump_reset_tracker.stats;
+package combat_tracker.stats;
 
 /**
  * A single recorded jump-reset attempt. The raw signed delta is stored even on

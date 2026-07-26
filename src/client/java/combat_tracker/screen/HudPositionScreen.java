@@ -1,7 +1,7 @@
-package jump_reset_tracker.screen;
+package combat_tracker.screen;
 
-import jump_reset_tracker.config.JrtConfig;
-import jump_reset_tracker.hud.HudRenderer;
+import combat_tracker.config.CtConfig;
+import combat_tracker.hud.HudRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
@@ -17,7 +17,7 @@ public class HudPositionScreen extends Screen {
     private static final int LEFT_BUTTON = 0;
 
     private final Screen parent;
-    private final JrtConfig config = JrtConfig.get();
+    private final CtConfig config = CtConfig.get();
 
     private boolean dragging = false;
     private int dragOffsetX = 0;
@@ -97,7 +97,7 @@ public class HudPositionScreen extends Screen {
 
     @Override
     public void onClose() {
-        JrtConfig.save();
+        CtConfig.save();
         Minecraft.getInstance().setScreen(parent);
     }
 }

@@ -1,7 +1,7 @@
-package jump_reset_tracker.detection;
+package combat_tracker.detection;
 
-import jump_reset_tracker.record.SessionRecorder;
-import jump_reset_tracker.stats.ComboStatsTracker;
+import combat_tracker.record.SessionRecorder;
+import combat_tracker.stats.ComboStatsTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.entity.Entity;

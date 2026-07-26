@@ -1,6 +1,6 @@
-package jump_reset_tracker.mixin;
+package combat_tracker.mixin;
 
-import jump_reset_tracker.hud.HudRenderer;
+import combat_tracker.hud.HudRenderer;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.GuiGraphics;

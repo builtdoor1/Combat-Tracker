@@ -1,10 +1,10 @@
-package jump_reset_tracker.hud;
+package combat_tracker.hud;
 
-import jump_reset_tracker.config.JrtConfig;
-import jump_reset_tracker.detection.ComboTracker;
-import jump_reset_tracker.record.SessionRecorder;
-import jump_reset_tracker.stats.ComboStatsTracker;
-import jump_reset_tracker.stats.StatsTracker;
+import combat_tracker.config.CtConfig;
+import combat_tracker.detection.ComboTracker;
+import combat_tracker.record.SessionRecorder;
+import combat_tracker.stats.ComboStatsTracker;
+import combat_tracker.stats.StatsTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -36,7 +36,7 @@ public class HudRenderer {
     }
 
     public static int accentColor() {
-        int i = JrtConfig.get().hudThemeIndex;
+        int i = CtConfig.get().hudThemeIndex;
         if (i < 0 || i >= THEME_COLORS.length) {
             i = 0;
         }
@@ -44,18 +44,18 @@ public class HudRenderer {
     }
 
     private static int bgColor() {
-        int alpha = Math.max(0, Math.min(100, JrtConfig.get().hudBgOpacityPct)) * 255 / 100;
+        int alpha = Math.max(0, Math.min(100, CtConfig.get().hudBgOpacityPct)) * 255 / 100;
         return (alpha << 24);
     }
 
     private static double scale() {
-        return Math.max(0.5, Math.min(2.0, JrtConfig.get().hudScale));
+        return Math.max(0.5, Math.min(2.0, CtConfig.get().hudScale));
     }
 
     // ── In-game render ─────────────────────────────────────────────────────────
 
     public static void render(GuiGraphics graphics) {
-        JrtConfig config = JrtConfig.get();
+        CtConfig config = CtConfig.get();
         if (!config.hudEnabled) {
             return;
         }
@@ -123,7 +123,7 @@ public class HudRenderer {
     // ── Content ────────────────────────────────────────────────────────────────
 
     private static List<Line> buildLines() {
-        JrtConfig cfg = JrtConfig.get();
+        CtConfig cfg = CtConfig.get();
         StatsTracker jr = StatsTracker.get();
         ComboStatsTracker combo = ComboStatsTracker.get();
         int accent = accentColor();

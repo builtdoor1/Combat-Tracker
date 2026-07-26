@@ -1,8 +1,8 @@
-package jump_reset_tracker.integration;
+package combat_tracker.integration;
 
 import com.terraformersmc.modmenu.api.ConfigScreenFactory;
 import com.terraformersmc.modmenu.api.ModMenuApi;
-import jump_reset_tracker.screen.ConfigScreen;
+import combat_tracker.screen.ConfigScreen;
 
 /**
  * Registers the config screen with Mod Menu. This class is only ever loaded when

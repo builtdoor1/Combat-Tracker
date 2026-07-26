@@ -1,4 +1,4 @@
-package jump_reset_tracker.record;
+package combat_tracker.record;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;

@@ -1,6 +1,6 @@
-package jump_reset_tracker.mixin;
+package combat_tracker.mixin;
 
-import jump_reset_tracker.JumpResetTrackerClient;
+import combat_tracker.CombatTrackerClient;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
@@ -17,7 +17,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *   <li>{@code handleDamageEvent(...)} — the exact moment the client registers a
  *       hit, so the hit time isn't quantized to the end of the tick.</li>
  * </ul>
- * Both feed nanosecond timestamps to {@link JumpResetTrackerClient}, letting the
+ * Both feed nanosecond timestamps to {@link CombatTrackerClient}, letting the
  * tracker compute a real sub-tick delta instead of collapsing same-tick resets to 0 ms.
  */
 @Mixin(LivingEntity.class)
@@ -26,14 +26,14 @@ public class LivingEntityMixin {
     @Inject(method = "jumpFromGround()V", at = @At("HEAD"))
     private void jumpResetTracker$onJump(CallbackInfo ci) {
         if ((Object) this == Minecraft.getInstance().player) {
-            JumpResetTrackerClient.jumpNano = System.nanoTime();
+            CombatTrackerClient.jumpNano = System.nanoTime();
         }
     }
 
     @Inject(method = "handleDamageEvent(Lnet/minecraft/world/damagesource/DamageSource;)V", at = @At("HEAD"))
     private void jumpResetTracker$onDamageEvent(DamageSource source, CallbackInfo ci) {
         if ((Object) this == Minecraft.getInstance().player) {
-            JumpResetTrackerClient.hitNano = System.nanoTime();
+            CombatTrackerClient.hitNano = System.nanoTime();
         }
     }
 }

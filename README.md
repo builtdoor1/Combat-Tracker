@@ -82,7 +82,7 @@ When **Chat** is enabled, each jump-reset *attempt* prints one line (green HIT /
 
 ## Recording sessions & reports
 
-Use **Start Recording** in the config screen (or bind the *Start/Stop Recording* key under Controls). While recording, every jump-reset attempt and every combo interval is captured with a timestamp. **Stop Recording** writes two files to `config/jump_reset_tracker/recordings/` and prints the path to chat:
+Use **Start Recording** in the config screen (or bind the *Start/Stop Recording* key under Controls). While recording, every jump-reset attempt and every combo interval is captured with a timestamp. **Stop Recording** writes two files to `config/combat_tracker/recordings/` and prints the path to chat:
 
 - `session-<timestamp>.html` — a self-contained report you open in any browser: start/end **time signatures**, summary cards, and **interactive SVG charts** (jump-reset delta over time, combo interval over time). **Scroll to zoom, drag to pan, double-click to reset** — so you can inspect small jitters. Hover a point for its exact value.
 - `session-<timestamp>.json` — the canonical data plus the integrity block.
@@ -99,7 +99,7 @@ Each session embeds a **SHA-256 hash** and an **HMAC-SHA256 signature** over the
 ## Configuration files
 
 ```
-.minecraft/config/jump_reset_tracker/
+.minecraft/config/combat_tracker/
 ├── config.json        # timing window, HUD options, detection tuning
 ├── stats.json         # jump-reset history + aggregates
 ├── combo_stats.json   # combo intervals + aggregates
@@ -132,4 +132,4 @@ Output: `build/libs/combat-tracker-<modversion>+<mcversion>.jar`. Requires **JDK
 
 ## License
 
-[CC0-1.0](LICENSE) — public domain.
+[MIT](LICENSE) © 2026 builtdoor

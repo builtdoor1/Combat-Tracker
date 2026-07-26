@@ -1,4 +1,4 @@
-package jump_reset_tracker.config;
+package combat_tracker.config;
 
 /**
  * Holds the tuneable timing bounds (in milliseconds) that define a jump reset

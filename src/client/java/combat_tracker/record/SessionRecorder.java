@@ -1,9 +1,9 @@
-package jump_reset_tracker.record;
+package combat_tracker.record;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import jump_reset_tracker.stats.ComboStatsTracker;
-import jump_reset_tracker.stats.StatsTracker;
+import combat_tracker.stats.ComboStatsTracker;
+import combat_tracker.stats.StatsTracker;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -24,7 +24,7 @@ import java.util.List;
 /**
  * Records a session of jump-reset and combo events into a tamper-evident report.
  *
- * <p>On stop, writes two files into {@code config/jump_reset_tracker/recordings/}:
+ * <p>On stop, writes two files into {@code config/combat_tracker/recordings/}:
  * a {@code .json} holding the canonical data plus a SHA-256 hash and an
  * HMAC-SHA256 signature, and a self-contained {@code .html} report with charts,
  * start/end time signatures, and the same integrity block.</p>
@@ -32,7 +32,7 @@ import java.util.List;
  * <p>See {@link IntegrityUtil} for the limits of the signature.</p>
  */
 public class SessionRecorder {
-    private static final Logger LOGGER = LoggerFactory.getLogger("jump_reset_tracker/record");
+    private static final Logger LOGGER = LoggerFactory.getLogger("combat_tracker/record");
     private static final Gson CANONICAL = new GsonBuilder().disableHtmlEscaping().create();
     private static final Gson PRETTY = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final DateTimeFormatter HUMAN =
@@ -58,7 +58,7 @@ public class SessionRecorder {
     }
 
     public static Path dir() {
-        return FabricLoader.getInstance().getConfigDir().resolve("jump_reset_tracker").resolve("recordings");
+        return FabricLoader.getInstance().getConfigDir().resolve("combat_tracker").resolve("recordings");
     }
 
     public void toggle() {

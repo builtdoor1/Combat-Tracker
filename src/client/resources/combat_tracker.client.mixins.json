@@ -1,6 +1,6 @@
 {
 	"required": true,
-	"package": "jump_reset_tracker.mixin",
+	"package": "combat_tracker.mixin",
 	"compatibilityLevel": "JAVA_21",
 	"client": [
 		"LivingEntityMixin",

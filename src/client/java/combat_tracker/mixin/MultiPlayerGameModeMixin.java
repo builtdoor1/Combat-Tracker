@@ -1,6 +1,6 @@
-package jump_reset_tracker.mixin;
+package combat_tracker.mixin;
 
-import jump_reset_tracker.detection.ComboTracker;
+import combat_tracker.detection.ComboTracker;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;

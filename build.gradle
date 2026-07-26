@@ -28,7 +28,7 @@ loom {
 	splitEnvironmentSourceSets()
 
 	mods {
-		"jump_reset_tracker" {
+		"combat_tracker" {
 			sourceSet sourceSets.main
 			sourceSet sourceSets.client
 		}

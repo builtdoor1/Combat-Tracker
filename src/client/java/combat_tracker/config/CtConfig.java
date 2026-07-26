@@ -1,4 +1,4 @@
-package jump_reset_tracker.config;
+package combat_tracker.config;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -12,13 +12,13 @@ import java.nio.file.Path;
 
 /**
  * Persisted mod configuration: the timing window plus HUD/chat toggles.
- * Stored as JSON in {@code .minecraft/config/jump_reset_tracker/config.json}.
+ * Stored as JSON in {@code .minecraft/config/combat_tracker/config.json}.
  */
-public class JrtConfig {
-    private static final Logger LOGGER = LoggerFactory.getLogger("jump_reset_tracker/config");
+public class CtConfig {
+    private static final Logger LOGGER = LoggerFactory.getLogger("combat_tracker/config");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
-    private static JrtConfig instance;
+    private static CtConfig instance;
 
     public TimingWindow window = new TimingWindow();
     public boolean hudEnabled = true;
@@ -48,7 +48,7 @@ public class JrtConfig {
     /** Fraction of round-trip ping treated as one-way latency for hit-time compensation. */
     public double pingCompFactor = 0.5;
 
-    public static JrtConfig get() {
+    public static CtConfig get() {
         if (instance == null) {
             instance = load();
         }
@@ -56,18 +56,18 @@ public class JrtConfig {
     }
 
     public static Path configDir() {
-        return FabricLoader.getInstance().getConfigDir().resolve("jump_reset_tracker");
+        return FabricLoader.getInstance().getConfigDir().resolve("combat_tracker");
     }
 
     private static Path configFile() {
         return configDir().resolve("config.json");
     }
 
-    public static JrtConfig load() {
+    public static CtConfig load() {
         Path file = configFile();
         try {
             if (Files.exists(file)) {
-                JrtConfig cfg = GSON.fromJson(Files.readString(file), JrtConfig.class);
+                CtConfig cfg = GSON.fromJson(Files.readString(file), CtConfig.class);
                 if (cfg != null) {
                     if (cfg.window == null) {
                         cfg.window = new TimingWindow();
@@ -78,7 +78,7 @@ public class JrtConfig {
         } catch (Exception e) {
             LOGGER.warn("Failed to load config, using defaults", e);
         }
-        JrtConfig def = new JrtConfig();
+        CtConfig def = new CtConfig();
         def.saveInternal();
         return def;
     }

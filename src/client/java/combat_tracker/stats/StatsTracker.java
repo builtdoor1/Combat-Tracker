@@ -1,4 +1,4 @@
-package jump_reset_tracker.stats;
+package combat_tracker.stats;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -15,13 +15,13 @@ import java.util.List;
 /**
  * Records every jump-reset attempt and computes aggregate statistics
  * (success rate, average delta, standard deviation). Persisted as JSON in
- * {@code .minecraft/config/jump_reset_tracker/stats.json}.
+ * {@code .minecraft/config/combat_tracker/stats.json}.
  *
  * <p>Running sums are cached so the HUD can read aggregates every frame without
  * iterating the full attempt history.</p>
  */
 public class StatsTracker {
-    private static final Logger LOGGER = LoggerFactory.getLogger("jump_reset_tracker/stats");
+    private static final Logger LOGGER = LoggerFactory.getLogger("combat_tracker/stats");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     private static StatsTracker instance;
@@ -45,7 +45,7 @@ public class StatsTracker {
 
     private static Path statsFile() {
         return FabricLoader.getInstance().getConfigDir()
-                .resolve("jump_reset_tracker")
+                .resolve("combat_tracker")
                 .resolve("stats.json");
     }
 

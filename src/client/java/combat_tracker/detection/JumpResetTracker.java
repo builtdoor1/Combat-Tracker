@@ -1,10 +1,10 @@
-package jump_reset_tracker.detection;
+package combat_tracker.detection;
 
-import jump_reset_tracker.JumpResetTrackerClient;
-import jump_reset_tracker.config.JrtConfig;
-import jump_reset_tracker.config.TimingWindow;
-import jump_reset_tracker.record.SessionRecorder;
-import jump_reset_tracker.stats.StatsTracker;
+import combat_tracker.CombatTrackerClient;
+import combat_tracker.config.CtConfig;
+import combat_tracker.config.TimingWindow;
+import combat_tracker.record.SessionRecorder;
+import combat_tracker.stats.StatsTracker;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -17,7 +17,7 @@ import net.minecraft.network.chat.Component;
  * <p>Run once per client tick. Each tick:
  * <ol>
  *   <li><b>Jump</b> is detected from the real {@code jumpFromGround()} call (via
- *       {@link jump_reset_tracker.mixin.LivingEntityMixin}) — NOT from upward
+ *       {@link combat_tracker.mixin.LivingEntityMixin}) — NOT from upward
  *       velocity, so knockback (e.g. a crit while standing still) can never be
  *       mistaken for a jump.</li>
  *   <li><b>Hit</b> is detected client-side: {@code hurtTime} goes 0→+ while the
@@ -64,7 +64,7 @@ public class JumpResetTracker {
             return;
         }
 
-        JrtConfig cfg = JrtConfig.get();
+        CtConfig cfg = CtConfig.get();
         long tickNano = System.nanoTime();
 
         // ── Sample this tick's state ──────────────────────────────────────────
@@ -77,7 +77,7 @@ public class JumpResetTracker {
         double ping = measurePing(client);
 
         // ── Jump detection (real jumpFromGround call) ─────────────────────────
-        long jumpSignalNano = JumpResetTrackerClient.consumeJumpNano();
+        long jumpSignalNano = CombatTrackerClient.consumeJumpNano();
         boolean jumpNow = jumpSignalNano != 0L;
         if (jumpNow) {
             lastJumpTick = currentTick;
@@ -112,9 +112,9 @@ public class JumpResetTracker {
         prevOnGround = onGround;
     }
 
-    private void handleHit(JrtConfig cfg, long tickNano, double ping) {
+    private void handleHit(CtConfig cfg, long tickNano, double ping) {
         // Use the precise hit time from the mixin; fall back to the tick time.
-        long base = JumpResetTrackerClient.hitNano != 0L ? JumpResetTrackerClient.hitNano : tickNano;
+        long base = CombatTrackerClient.hitNano != 0L ? CombatTrackerClient.hitNano : tickNano;
         long compHitNano = base - (long) (ping * cfg.pingCompFactor * 1_000_000.0);
 
         int ticksSinceJump = currentTick - lastJumpTick;
@@ -148,7 +148,7 @@ public class JumpResetTracker {
         lastResultTick = currentTick;
         long delta = Math.round(ms);
 
-        TimingWindow window = JrtConfig.get().window;
+        TimingWindow window = CtConfig.get().window;
         TimingWindow.Result result = window.classify(delta);
         boolean success = result == TimingWindow.Result.SUCCESS;
 
@@ -179,7 +179,7 @@ public class JumpResetTracker {
         stats.setLastResult(hudText, color);
         stats.save();
 
-        if (JrtConfig.get().chatEnabled) {
+        if (CtConfig.get().chatEnabled) {
             LocalPlayer p = Minecraft.getInstance().player;
             if (p != null) {
                 ChatFormatting fmt = success ? ChatFormatting.GREEN : ChatFormatting.RED;

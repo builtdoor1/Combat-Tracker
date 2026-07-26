@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 1,
-	"id": "jump_reset_tracker",
+	"id": "combat_tracker",
 	"version": "${version}",
 	"name": "Combat Tracker",
 	"description": "Client-side stat tracker that detects and records jump-reset timing in PvP. Purely observational - it never modifies game physics or mechanics.",
@@ -8,20 +8,20 @@
 		"builtdoor"
 	],
 	"contact": {},
-	"license": "CC0-1.0",
-	"icon": "assets/jump_reset_tracker/icon.png",
+	"license": "MIT",
+	"icon": "assets/combat_tracker/icon.png",
 	"environment": "client",
 	"entrypoints": {
 		"client": [
-			"jump_reset_tracker.JumpResetTrackerClient"
+			"combat_tracker.CombatTrackerClient"
 		],
 		"modmenu": [
-			"jump_reset_tracker.integration.ModMenuIntegration"
+			"combat_tracker.integration.ModMenuIntegration"
 		]
 	},
 	"mixins": [
 		{
-			"config": "jump_reset_tracker.client.mixins.json",
+			"config": "combat_tracker.client.mixins.json",
 			"environment": "client"
 		}
 	],

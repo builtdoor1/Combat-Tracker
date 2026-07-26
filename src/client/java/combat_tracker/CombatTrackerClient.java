@@ -1,11 +1,11 @@
-package jump_reset_tracker;
+package combat_tracker;
 
-import jump_reset_tracker.config.JrtConfig;
-import jump_reset_tracker.detection.ComboTracker;
-import jump_reset_tracker.detection.JumpResetTracker;
-import jump_reset_tracker.record.SessionRecorder;
-import jump_reset_tracker.stats.ComboStatsTracker;
-import jump_reset_tracker.stats.StatsTracker;
+import combat_tracker.config.CtConfig;
+import combat_tracker.detection.ComboTracker;
+import combat_tracker.detection.JumpResetTracker;
+import combat_tracker.record.SessionRecorder;
+import combat_tracker.stats.ComboStatsTracker;
+import combat_tracker.stats.StatsTracker;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
@@ -21,8 +21,8 @@ import org.slf4j.LoggerFactory;
  * per-tick detection. Jump impulse capture, HUD rendering and outgoing-attack
  * detection happen via mixins.
  */
-public class JumpResetTrackerClient implements ClientModInitializer {
-    public static final String MOD_ID = "jump_reset_tracker";
+public class CombatTrackerClient implements ClientModInitializer {
+    public static final String MOD_ID = "combat_tracker";
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     /**
@@ -53,17 +53,17 @@ public class JumpResetTrackerClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         // Load persisted state up front.
-        JrtConfig.get();
+        CtConfig.get();
         StatsTracker.get();
         ComboStatsTracker.get();
 
         toggleHudKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-                "key.jump_reset_tracker.toggle_hud",
+                "key.combat_tracker.toggle_hud",
                 GLFW.GLFW_KEY_J,
                 KeyMapping.Category.MISC
         ));
         toggleRecordKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-                "key.jump_reset_tracker.toggle_record",
+                "key.combat_tracker.toggle_record",
                 GLFW.GLFW_KEY_UNKNOWN, // unbound by default
                 KeyMapping.Category.MISC
         ));
@@ -75,9 +75,9 @@ public class JumpResetTrackerClient implements ClientModInitializer {
 
     private void onEndTick(Minecraft client) {
         while (toggleHudKey.consumeClick()) {
-            JrtConfig config = JrtConfig.get();
+            CtConfig config = CtConfig.get();
             config.hudEnabled = !config.hudEnabled;
-            JrtConfig.save();
+            CtConfig.save();
         }
         while (toggleRecordKey.consumeClick()) {
             SessionRecorder.get().toggle();

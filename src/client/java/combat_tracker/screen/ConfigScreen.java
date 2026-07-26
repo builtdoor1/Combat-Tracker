@@ -1,10 +1,10 @@
-package jump_reset_tracker.screen;
+package combat_tracker.screen;
 
-import jump_reset_tracker.config.JrtConfig;
-import jump_reset_tracker.hud.HudRenderer;
-import jump_reset_tracker.record.SessionRecorder;
-import jump_reset_tracker.stats.ComboStatsTracker;
-import jump_reset_tracker.stats.StatsTracker;
+import combat_tracker.config.CtConfig;
+import combat_tracker.hud.HudRenderer;
+import combat_tracker.record.SessionRecorder;
+import combat_tracker.stats.ComboStatsTracker;
+import combat_tracker.stats.StatsTracker;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -23,7 +23,7 @@ import java.util.function.DoubleConsumer;
  */
 public class ConfigScreen extends Screen {
     private final Screen parent;
-    private final JrtConfig config = JrtConfig.get();
+    private final CtConfig config = CtConfig.get();
 
     private boolean confirmingReset = false;
     private Button resetButton;
@@ -166,7 +166,7 @@ public class ConfigScreen extends Screen {
         if (config.window.upperBoundMs < config.window.lowerBoundMs) {
             config.window.upperBoundMs = config.window.lowerBoundMs;
         }
-        JrtConfig.save();
+        CtConfig.save();
         StatsTracker.get().save();
         Minecraft.getInstance().setScreen(parent);
     }
