@@ -53,6 +53,15 @@ public class ComboTracker {
         // 0 means no click was behind this attack, so fall back to the tick.
         long clickNano = CombatTrackerClient.clickNano;
         long nano = clickNano != 0L ? clickNano : System.nanoTime();
+
+        // lastHitNano is also compared against System.nanoTime() in tick() to expire
+        // a combo, so it must never be moved backwards. A click timestamp slightly
+        // precedes the tick that processed it, so two hits landing on one tick could
+        // otherwise produce a negative interval and a lastHitNano in the past, which
+        // would expire the combo immediately.
+        if (nano <= lastHitNano) {
+            nano = System.nanoTime();
+        }
         long maxGapNano = COMBO_GAP_NANO;
 
         if (target.getId() == currentTargetId && comboHits >= 1 && (nano - lastHitNano) <= maxGapNano) {

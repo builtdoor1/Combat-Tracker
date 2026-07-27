@@ -31,11 +31,10 @@ public class MinecraftMixin {
     private void combatTracker$onStartAttack(CallbackInfoReturnable<Boolean> cir) {
         Minecraft client = (Minecraft) (Object) this;
 
-        // Take the click behind this swing first, before any guard can return.
-        // Vanilla calls startAttack once per queued press, so consuming here
-        // unconditionally keeps the click queue paired with attacks; bailing out
-        // early would leave a press stranded and shift every later interval.
-        CombatTrackerClient.clickNano = ClickTimestamps.consume();
+        // Claim the click behind this swing before any guard can return early, so a
+        // swing vanilla discards still clears the slot instead of leaving the press
+        // to be picked up by a later attack.
+        CombatTrackerClient.clickNano = ClickTimestamps.claim();
 
         LocalPlayer player = client.player;
         if (player == null || client.hitResult == null) {

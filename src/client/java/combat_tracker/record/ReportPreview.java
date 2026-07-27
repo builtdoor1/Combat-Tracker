@@ -1,5 +1,7 @@
 package combat_tracker.record;
 
+import combat_tracker.detection.ClickTimestamps;
+
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -63,6 +65,8 @@ public final class ReportPreview {
         System.out.println("tight    : " + tightHtml.toAbsolutePath()
                 + "  hits " + tight.hitMinMs + "-" + tight.hitMaxMs + " ms, sd " + fmt(tight.hitSdMs));
 
+        clickTimestampSelfTest();
+
         // Size behaviour across session lengths, to confirm downsampling engages
         // and does not throw away more of the graph than the budget requires.
         String base = "https://reeeeman1.github.io/Combat-Tracker/";
@@ -74,6 +78,42 @@ public final class ReportPreview {
             System.out.printf("n=%-5d link %4d chars  plotted %d/%d swings  %s%n",
                     n, linkLen, Math.min(res.pointLimit(), n), n,
                     linkLen <= 2000 ? "fits Discord" : "TOO LONG");
+        }
+    }
+
+    /**
+     * Guards the click-pairing rules that combo timing depends on.
+     *
+     * <p>Worth having as a check rather than a comment: the first version of this
+     * queued presses and paired them with attacks in order, which silently desynced
+     * whenever a press never became an attack and stopped combo detection entirely
+     * until the game restarted. {@link ClickTimestamps} has no Minecraft imports, so
+     * the rules that prevent that can be verified here without the game.</p>
+     */
+    private static void clickTimestampSelfTest() {
+        ClickTimestamps.clear();
+        check(ClickTimestamps.claim() == 0L, "empty slot yields no click");
+
+        long now = System.nanoTime();
+        ClickTimestamps.record(now);
+        check(ClickTimestamps.claim() == now, "a fresh press is returned");
+        check(ClickTimestamps.claim() == 0L, "a press is claimed at most once");
+
+        // A press old enough to belong to some earlier attack must be refused, or it
+        // would drag lastHitNano into the past and expire every combo on the spot.
+        ClickTimestamps.record(now - 5_000L * 1_000_000L);
+        check(ClickTimestamps.claim() == 0L, "a stale press is refused");
+
+        ClickTimestamps.record(System.nanoTime());
+        ClickTimestamps.clear();
+        check(ClickTimestamps.claim() == 0L, "clear drops a pending press");
+
+        System.out.println("click pairing: 5 checks passed");
+    }
+
+    private static void check(boolean ok, String what) {
+        if (!ok) {
+            throw new AssertionError("click pairing broken: " + what);
         }
     }
 
