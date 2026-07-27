@@ -30,8 +30,9 @@ public final class SessionData {
     public int jumpAttempts;
     public int jumpHits;
     public int jumpMisses;
-    public double jumpAvgMs;
-    public double jumpSdMs;
+    /** Mean and spread of the tick offsets. */
+    public double jumpAvgTicks;
+    public double jumpSdTicks;
 
     // ── Combo timing ─────────────────────────────────────────────────────────
     public int comboIntervals;
@@ -72,15 +73,16 @@ public final class SessionData {
     /** One scored jump-reset attempt. */
     public static final class JEvent {
         public long t;
-        public long deltaMs;
+        /** Signed tick offset from the ideal reset tick; 0 is perfect. */
+        public int offsetTicks;
         public String result;
 
         public JEvent() {
         }
 
-        public JEvent(long t, long deltaMs, String result) {
+        public JEvent(long t, int offsetTicks, String result) {
             this.t = t;
-            this.deltaMs = deltaMs;
+            this.offsetTicks = offsetTicks;
             this.result = result;
         }
     }

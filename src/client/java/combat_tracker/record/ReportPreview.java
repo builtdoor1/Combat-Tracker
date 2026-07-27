@@ -35,7 +35,7 @@ public final class ReportPreview {
         int events = args.length > 1 ? Integer.parseInt(args[1]) : 120;
         Files.createDirectories(outDir);
 
-        SessionData d = synthesise(events, 20250726_000000L, 38.0);
+        SessionData d = synthesise(events, 20250726_000000L, 1.4);
         String canonical = new com.google.gson.GsonBuilder().disableHtmlEscaping().create().toJson(d);
         byte[] bytes = canonical.getBytes(StandardCharsets.UTF_8);
         String sha = IntegrityUtil.sha256Hex(bytes);
@@ -52,27 +52,25 @@ public final class ReportPreview {
         System.out.println("fragment : " + frag.toAbsolutePath() + "  (" + payload.length() + " chars)");
         System.out.println("swings=" + d.swings + " jumps=" + d.jumpAttempts + " combos=" + d.comboIntervals);
 
-        // A consistent player whose successful resets cluster within a few ms. This
-        // is the case the successes-only chart exists for: on a shared 0-80ms axis
-        // this session is a flat line, and the spread that proves a human is doing
-        // it only becomes visible once the axis fits the data.
-        SessionData tight = synthesise(events, 777L, 6.0);
+        // A very consistent player, almost always landing the perfect tick. Useful
+        // for eyeballing what a near-flat distribution looks like on the chart.
+        SessionData tight = synthesise(events, 777L, 0.6);
         String tightCanonical = new com.google.gson.GsonBuilder().disableHtmlEscaping().create().toJson(tight);
         byte[] tb = tightCanonical.getBytes(StandardCharsets.UTF_8);
         Path tightHtml = outDir.resolve("preview-report-tight.html");
         Files.writeString(tightHtml, ReportBuilder.build(tight, IntegrityUtil.sha256Hex(tb),
                 IntegrityUtil.hmacSha256Hex(tb), tightCanonical));
         System.out.println("tight    : " + tightHtml.toAbsolutePath()
-                + "  hits " + tight.hitMinMs + "-" + tight.hitMaxMs + " ms, sd " + fmt(tight.hitSdMs));
+                + "  perfect " + tight.jumpHits + "/" + tight.jumpAttempts + ", sd " + fmt(tight.jumpSdTicks) + "t");
 
         clickTimestampSelfTest();
 
         // Size behaviour across session lengths, to confirm downsampling engages
         // and does not throw away more of the graph than the budget requires.
-        String base = "https://reeeeman1.github.io/Combat-Tracker/";
+        String base = "https://builtdoor1.github.io/Combat-Tracker/";
         int budget = SharePayload.DEFAULT_MAX_CHARS - base.length() - 1;
         for (int n : new int[]{50, 500, 5000}) {
-            SessionData big = synthesise(n, 1234L, 38.0);
+            SessionData big = synthesise(n, 1234L, 1.4);
             SharePayload.Result res = SharePayload.encodeWithStats(big, budget);
             int linkLen = base.length() + 1 + res.payload().length();
             System.out.printf("n=%-5d link %4d chars  plotted %d/%d swings  %s%n",
@@ -120,8 +118,8 @@ public final class ReportPreview {
     /** Builds a plausible human session: spread timings, scattered aim, sane reach. */
     static String fmt(double v) { return String.format("%.2f", v); }
 
-    /** @param jumpSpreadMs standard deviation of the jump-reset timings. */
-    static SessionData synthesise(int events, long seed, double jumpSpreadMs) {
+    /** @param jumpSpreadTicks standard deviation of the jump-reset tick offsets. */
+    static SessionData synthesise(int events, long seed, double jumpSpreadTicks) {
         Random rng = new Random(seed);
         long start = Instant.parse("2026-07-26T02:00:00Z").toEpochMilli();
         long end = start + events * 900L;
@@ -141,13 +139,13 @@ public final class ReportPreview {
         for (int i = 0; i < events; i++) {
             long t = start + i * 900L + rng.nextInt(120);
 
-            // Jump resets: centred a little inside the success window, human spread.
-            // Anything past 200ms is discarded by the tracker as "not an attempt",
-            // so the preview drops it too and stays representative.
-            long delta = Math.round(45 + rng.nextGaussian() * jumpSpreadMs);
-            if (Math.abs(delta) <= 200) {
-                String result = delta < 0 ? "TOO_EARLY" : (delta > 80 ? "TOO_LATE" : "SUCCESS");
-                d.jumpEvents.add(new SessionData.JEvent(t, delta, result));
+            // Jump resets, as tick offsets from the ideal reset tick. A human lands
+            // mostly on 0 and +1 with a tail either side; the tracker discards
+            // anything beyond the max tick gap, so the preview does too.
+            int offset = (int) Math.round(rng.nextGaussian() * jumpSpreadTicks);
+            if (Math.abs(offset) < 10) {
+                String result = offset == 0 ? "PERFECT" : (offset < 0 ? "TOO_EARLY" : "TOO_LATE");
+                d.jumpEvents.add(new SessionData.JEvent(t, offset, result));
             }
 
             // Combo intervals around the sword cooldown, with real jitter.

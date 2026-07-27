@@ -24,22 +24,22 @@ final class SessionStats {
         double hSum = 0, hSumSq = 0;
         long hMin = Long.MAX_VALUE, hMax = Long.MIN_VALUE;
         for (SessionData.JEvent j : d.jumpEvents) {
-            sum += j.deltaMs;
-            sumSq += (double) j.deltaMs * j.deltaMs;
-            if ("SUCCESS".equals(j.result)) {
+            sum += j.offsetTicks;
+            sumSq += (double) j.offsetTicks * j.offsetTicks;
+            if ("PERFECT".equals(j.result)) {
                 hits++;
-                hSum += j.deltaMs;
-                hSumSq += (double) j.deltaMs * j.deltaMs;
-                hMin = Math.min(hMin, j.deltaMs);
-                hMax = Math.max(hMax, j.deltaMs);
+                hSum += j.offsetTicks;
+                hSumSq += (double) j.offsetTicks * j.offsetTicks;
+                hMin = Math.min(hMin, j.offsetTicks);
+                hMax = Math.max(hMax, j.offsetTicks);
             }
         }
         int n = d.jumpEvents.size();
         d.jumpAttempts = n;
         d.jumpHits = hits;
         d.jumpMisses = n - hits;
-        d.jumpAvgMs = n == 0 ? 0 : sum / n;
-        d.jumpSdMs = stdDev(sum, sumSq, n);
+        d.jumpAvgTicks = n == 0 ? 0 : sum / n;
+        d.jumpSdTicks = stdDev(sum, sumSq, n);
 
         // Spread across the successful resets alone is the human-versus-bot signal;
         // mixing in misses inflates it and hides what it is meant to show.

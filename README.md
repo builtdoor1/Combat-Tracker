@@ -25,7 +25,7 @@ Four accusations, four answers. In every case the thing that clears you is incon
 
 | Accusation | What the mod shows | What clears you |
 |---|---|---|
-| *"You're auto jump-resetting"* | The millisecond gap between getting hit and jumping | Human timing varies by tens of milliseconds. A macro repeats nearly the same number. |
+| *"You're auto jump-resetting"* | Which tick you jumped on relative to the hit | A human lands across several ticks. A macro hits the same tick nearly every time. |
 | *"You're using a triggerbot / autoclicker"* | The gap between each hit in a combo | Human clicking jitters. A bot's interval is machine-steady. |
 | *"You have reach"* | How far the target was on every swing, hit or miss | Your hits sit at or under vanilla's 3.0 blocks. |
 | *"You have aimbot"* | Where your crosshair sat on their hitbox | Human aim is scattered across the body. Aim assist clusters on centre. |
@@ -58,9 +58,9 @@ The overlay shows your running stats:
 
 | Line | Meaning |
 |---|---|
-| `Jump: 12 hit / 5 miss` | Jump resets you landed vs missed |
-| `Rate 70.6%  Avg 44 SD 21` | Success rate, average timing, and SD (how much your timing varies) |
-| `Last JR: HIT +38ms` | Your most recent attempt |
+| `Jump: 12 perfect / 5 off` | Resets on the perfect tick vs off it |
+| `Perfect 31.2%  Avg +0.3t SD 1.2` | How often you hit the perfect tick, your average offset, and how much it varies |
+| `Last JR: Perfect!` | Your most recent attempt (or e.g. `Late 2t`) |
 | `Combo: 3   Last 640ms` | Current combo length, and the gap since the last hit |
 | `Variance 47ms` | How much your combo timing varies |
 
@@ -93,7 +93,9 @@ Two files land in `.minecraft/config/combat_tracker/recordings/`:
 
 Four charts. On all of them you can **click a point to see its exact value**, scroll to zoom, drag to pan, and double-click to reset.
 
-**Jump resets.** Every attempt, green for hits and red for misses, plotted as milliseconds from the hit. Look at how much the dots move around. Human timing drifts by tens of milliseconds and never repeats exactly. A macro produces a nearly flat line.
+**Jump resets.** Every attempt plotted as **ticks** from the ideal reset tick, green for perfect and red for off. 0 means you jumped on the tick right after being hit, negative means early, positive means late.
+
+Look at how much the dots move around. A human lands across several ticks. A macro parks on the same one almost every time, which shows up as a flat line.
 
 **Combo timing.** The gap between consecutive hits in a combo. Same idea: spread is good. The jitter number in the cards above is that spread, measured. Low jitter looks automated.
 
@@ -147,7 +149,7 @@ Treat a report as strong supporting evidence, not a verdict.
 | Theme | Yellow | Accent colour: Yellow / Aqua / Green / Pink / Orange / White |
 | Move HUD… | | Drag the overlay anywhere on screen |
 
-**Timing** has one setting: the success window (default `0` to `80 ms`), which decides what counts as a successful reset. It changes the scoring only, never the measurement.
+**Timing** has one setting: the **max tick gap** (default `10`), the largest gap between the hit and the jump that still counts as an attempt at a reset. Beyond it the two events are unrelated and nothing is recorded. It changes what gets counted, never how it's measured.
 
 Everything else about detection is fixed and not adjustable. A wrong value would quietly corrupt the numbers this mod exists to defend, and a report only means something if every copy of the mod measured the same way.
 
@@ -176,8 +178,10 @@ Everything else about detection is fixed and not adjustable. A wrong value would
 
 - **Jump** comes from the real `jumpFromGround()` call via a mixin, not from upward velocity, so knockback (a crit while you stand still) can never be mistaken for a jump.
 - **Hit** is detected when `hurtTime` goes 0 to positive while the invulnerability timer is active *and* horizontal knockback exceeds `0.065`, which filters out fall, fire and poison damage (none of which impart horizontal knockback).
-- A hit opens a short tick window (6 ticks grounded, 10 airborne, longer in the air because you can't jump until you land). The next jump inside it is scored with `System.nanoTime()` and classed **HIT**, **MISS too late**, or **MISS too early**.
-- **Attempts further than 200ms from the hit are discarded**, not scored. A jump a fifth of a second either side of taking damage is just a jump that happened nearby, and counting it drags the statistics around and flattens the chart's axis.
+- Timing is measured in **ticks**, following [sootysplash/jump-reset](https://github.com/sootysplash/jump-reset). Two tick stamps are compared, both read from `player.tickCount`: the tick you jumped and the tick you were hit. A reset is **perfect when the jump lands on the tick right after the hit**, so the signed offset is `jumpTick - (hurtTick + 1)`: 0 perfect, negative early, positive late.
+- Pairs further apart than the **max tick gap** (default 10) are not an attempt at a reset and are not recorded. A jump older than 2.5s is likewise never considered against a hit.
+- Milliseconds were the wrong unit. The knockback is applied on a tick and the jump impulse is applied on a tick, so a millisecond figure was a tick count in disguise, which is why the old values piled up on 50ms boundaries with nothing meaningful in between.
+- **One deviation from sootysplash, on purpose:** it times off any `handleDamageEvent`, which includes fall, fire and poison damage. A hit here still has to carry horizontal knockback, because a jump after fall damage is not a jump reset and this report is meant to describe PvP.
 
 **No ping compensation, deliberately.** Earlier versions wound the hit timestamp back by the estimated one-way latency. That's wrong: your jump is timed on your client's clock, so subtracting latency from only the hit mixes a server-frame time with a client-frame one and adds a flat bias of half your ping to every result. At 120ms that's +60ms of an 80ms success window, so genuine resets scored as TOO_LATE.
 

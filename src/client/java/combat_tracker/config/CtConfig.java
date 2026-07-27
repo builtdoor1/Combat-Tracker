@@ -43,7 +43,7 @@ public class CtConfig {
      * so this host only ever serves the static viewer page and never receives any
      * session data. Configurable so a fork can point at its own copy.
      */
-    public String shareBaseUrl = "https://reeeeman1.github.io/Combat-Tracker/";
+    public String shareBaseUrl = "https://builtdoor1.github.io/Combat-Tracker/";
 
     // Detection tuning is deliberately NOT configurable. The knockback threshold and
     // the post-hit tick windows live as constants in
@@ -79,6 +79,7 @@ public class CtConfig {
                     if (cfg.window == null) {
                         cfg.window = new TimingWindow();
                     }
+                    cfg.migrate();
                     return cfg;
                 }
             }
@@ -88,6 +89,21 @@ public class CtConfig {
         CtConfig def = new CtConfig();
         def.saveInternal();
         return def;
+    }
+
+    /**
+     * Fixes up values a saved config can be carrying from an older version.
+     *
+     * <p>{@link #shareBaseUrl} is persisted, so bumping its default does nothing for
+     * anyone who already has a config file. The GitHub account was renamed and the
+     * old Pages host stops resolving, so a stale value here produces links that
+     * simply 404.</p>
+     */
+    private void migrate() {
+        if (shareBaseUrl != null && shareBaseUrl.contains("reeeeman1.github.io")) {
+            shareBaseUrl = shareBaseUrl.replace("reeeeman1.github.io", "builtdoor1.github.io");
+            LOGGER.info("Updated share link host to builtdoor1.github.io after the account rename.");
+        }
     }
 
     public static void save() {

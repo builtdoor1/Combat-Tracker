@@ -35,11 +35,6 @@ public class ModMenuIntegration implements ModMenuApi {
                     .setParentScreen(parent)
                     .setTitle(Component.literal("Combat Tracker"))
                     .setSavingRunnable(() -> {
-                        // A success window that ends before it starts would classify everything
-                        // as a miss; collapse it to a point instead.
-                        if (config.window.upperBoundMs < config.window.lowerBoundMs) {
-                            config.window.upperBoundMs = config.window.lowerBoundMs;
-                        }
                         CtConfig.save();
                         StatsTracker.get().save();
                     });
@@ -126,27 +121,22 @@ public class ModMenuIntegration implements ModMenuApi {
     private static void buildTiming(ConfigBuilder builder, ConfigEntryBuilder eb, CtConfig config) {
         ConfigCategory timing = builder.getOrCreateCategory(Component.literal("Timing"));
 
-        timing.addEntry(eb.startLongSlider(Component.literal("Success window min"),
-                        config.window.lowerBoundMs, 0, 600)
-                .setDefaultValue(0)
-                .setTextGetter(v -> Component.literal(v + " ms"))
-                .setTooltip(Component.literal("Deltas below this count as MISS - too early."))
-                .setSaveConsumer(v -> config.window.lowerBoundMs = v)
-                .build());
-
-        timing.addEntry(eb.startLongSlider(Component.literal("Success window max"),
-                        config.window.upperBoundMs, 0, 600)
-                .setDefaultValue(80)
-                .setTextGetter(v -> Component.literal(v + " ms"))
-                .setTooltip(Component.literal("Deltas above this count as MISS - too late."))
-                .setSaveConsumer(v -> config.window.upperBoundMs = v)
+        timing.addEntry(eb.startIntSlider(Component.literal("Max tick gap"), config.window.maxTicks, 1, 20)
+                .setDefaultValue(10)
+                .setTextGetter(v -> Component.literal(v + " ticks"))
+                .setTooltip(Component.literal("Largest gap between the hit and the jump that still counts as an "
+                                + "attempt at a reset."),
+                        Component.literal("Beyond this the two are unrelated and nothing is recorded.")
+                                .withStyle(ChatFormatting.GRAY))
+                .setSaveConsumer(v -> config.window.maxTicks = v)
                 .build());
 
         timing.addEntry(eb.startTextDescription(Component.literal(
-                        "Detection tuning is fixed and not adjustable. Knockback threshold and the post-hit "
-                                + "tick windows are constants, and ping compensation is measured automatically "
-                                + "from your latency to the server. A report is only worth something if every "
-                                + "copy of the mod measured the same way."))
+                        "A reset is perfect when you jump on the tick right after the hit. Anything else is "
+                                + "counted in whole ticks early or late, because the knockback and your jump "
+                                + "impulse are both applied on ticks. "
+                                + "Everything else about detection is fixed and not adjustable. A report is only "
+                                + "worth something if every copy of the mod measured the same way."))
                 .build());
     }
 

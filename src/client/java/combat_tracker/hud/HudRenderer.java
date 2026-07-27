@@ -146,8 +146,8 @@ public class HudRenderer {
             lines.add(new Line(String.format("Variance %.0fms", variance), varColor));
         } else {
             lines.add(new Line("Combat Tracker", accent));
-            lines.add(new Line(String.format("Jump: %d hit / %d miss", jr.hits(), jr.misses()), 0xFFFFFFFF));
-            lines.add(new Line(String.format("Rate %.1f%%  Avg %.0f SD %.0f", jr.successRate(), jr.averageDelta(), jr.stdDev()), 0xFFAAAAAA));
+            lines.add(new Line(String.format("Jump: %d perfect / %d off", jr.hits(), jr.misses()), 0xFFFFFFFF));
+            lines.add(new Line(String.format("Perfect %.1f%%  Avg %+.1ft SD %.1f", jr.successRate(), jr.averageDelta(), jr.stdDev()), 0xFFAAAAAA));
             lines.add(new Line(String.format("Last JR: %s", jr.lastResult()), jr.lastResultColor()));
             lines.add(new Line(String.format("Combo: %d   Last %dms", comboCount, lastHit), accent));
             lines.add(new Line(String.format("Variance %.0fms", variance), varColor));

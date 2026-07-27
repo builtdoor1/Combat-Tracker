@@ -28,18 +28,21 @@ public class CombatTrackerClient implements ClientModInitializer {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     /**
-     * Set by {@code LivingEntityMixin} to {@code System.nanoTime()} when the local
-     * player actually jumps ({@code jumpFromGround}). Read and cleared by the
-     * tracker each tick via {@link #consumeJumpNano()}. 0 means "no jump".
+     * Tick the local player jumped on, set by {@code LivingEntityMixin}. Read and
+     * cleared by the tracker each tick via {@link #consumeJumpTick()}.
+     * {@link Integer#MIN_VALUE} means "no jump pending".
+     *
+     * <p>A tick number rather than a timestamp because jump-reset timing is
+     * tick-quantised on both sides. See {@link combat_tracker.config.TimingWindow}.</p>
      */
-    public static volatile long jumpNano = 0L;
+    public static volatile int jumpTick = Integer.MIN_VALUE;
 
-    /**
-     * Set by {@code LivingEntityMixin} to {@code System.nanoTime()} when the local
-     * player registers a hit ({@code handleDamageEvent}). Gives a precise hit time
-     * instead of one quantized to the end of the tick. 0 means "none yet".
-     */
-    public static volatile long hitNano = 0L;
+    /** Returns the pending jump tick (or MIN_VALUE) and clears it. */
+    public static int consumeJumpTick() {
+        int v = jumpTick;
+        jumpTick = Integer.MIN_VALUE;
+        return v;
+    }
 
     /**
      * Time of the mouse press behind the attack currently being processed, set by
@@ -50,13 +53,6 @@ public class CombatTrackerClient implements ClientModInitializer {
      * attack was processed on. See {@link combat_tracker.detection.ClickTimestamps}.</p>
      */
     public static volatile long clickNano = 0L;
-
-    /** Returns the pending jump nano-timestamp (or 0) and clears it. */
-    public static long consumeJumpNano() {
-        long v = jumpNano;
-        jumpNano = 0L;
-        return v;
-    }
 
     private final JumpResetTracker tracker = new JumpResetTracker();
     private KeyMapping toggleHudKey;
