@@ -5,33 +5,64 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Combat Tracker Session</title>
 <style>
-  body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#14161a;color:#e8eaed;margin:0;padding:24px 32px;}
-  h1{font-size:20px;margin:0 0 4px;}
-  h2{font-size:15px;margin:24px 0 8px;color:#9fb3c8;}
-  .sub{color:#8a93a0;font-size:13px;margin-bottom:12px;line-height:1.5;}
-  .who{display:flex;align-items:center;gap:12px;margin:12px 0 4px;flex-wrap:wrap;}
-  .who img{width:48px;height:48px;image-rendering:pixelated;border-radius:6px;background:#1c2026;}
-  .who .ign{font-size:22px;font-weight:600;}
-  .vs{display:flex;align-items:center;gap:8px;color:#8a93a0;font-size:13px;flex-wrap:wrap;}
-  .vs img{width:24px;height:24px;image-rendering:pixelated;border-radius:4px;background:#1c2026;}
+  :root{
+    --bg:#14161a; --panel:#1c2026; --panel-2:#161a20; --line:#2a2f37; --line-hi:#3d4550;
+    --text:#e8eaed; --muted:#8a93a0; --dim:#5f6772; --accent:#9fb3c8; --warn:#ffb454;
+    --ease:cubic-bezier(.22,.61,.36,1); --fast:140ms; --med:220ms;
+    --e1:0 1px 3px rgba(0,0,0,.30); --e2:0 6px 18px rgba(0,0,0,.38);
+  }
+  *{box-sizing:border-box;}
+  body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text);
+       margin:0;padding:clamp(16px,2.5vw,32px);-webkit-font-smoothing:antialiased;}
+  h1{font-size:clamp(19px,1.4vw + 14px,26px);margin:0 0 4px;letter-spacing:-.01em;}
+  h2{font-size:clamp(14px,.5vw + 12px,17px);margin:28px 0 8px;color:var(--accent);letter-spacing:.01em;}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:12px;line-height:1.55;}
+  .who{display:flex;align-items:center;gap:14px;margin:14px 0 4px;flex-wrap:wrap;}
+  .who img{width:52px;height:52px;image-rendering:pixelated;border-radius:8px;background:var(--panel);
+           box-shadow:var(--e1);transition:transform var(--med) var(--ease);}
+  .who img:hover{transform:scale(1.06);}
+  .who .ign{font-size:clamp(20px,1vw + 16px,25px);font-weight:600;letter-spacing:-.01em;}
+  .vs{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;flex-wrap:wrap;}
+  .vs img{width:24px;height:24px;image-rendering:pixelated;border-radius:5px;background:var(--panel);}
   table{border-collapse:collapse;font-size:13px;margin:4px 0;}
-  td,th{border:1px solid #2a2f37;padding:4px 10px;text-align:left;}
-  th{background:#1c2026;color:#9fb3c8;}
-  .cards{display:flex;flex-wrap:wrap;gap:12px;margin:8px 0;}
-  .card{background:#1c2026;border:1px solid #2a2f37;border-radius:8px;padding:10px 16px;min-width:110px;}
-  .card .v{font-size:22px;font-weight:600;}
-  .card .k{font-size:12px;color:#8a93a0;}
-  .note{background:#161a20;border:1px solid #2a2f37;border-radius:8px;padding:12px;font-size:12px;line-height:1.6;color:#9fb3c8;}
-  .warn{color:#ffb454;}
-  .thin{color:#ffb454;font-size:12px;margin:4px 0 8px;}
-  svg.chart circle{cursor:pointer;}
-  svg.chart circle:hover{stroke:#fff;stroke-width:1.5;}
-  svg.chart circle[data-sel]{stroke:#fff;stroke-width:2;}
-  .chartwrap{margin-bottom:14px;}
-  .readout{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#5f6772;padding:6px 2px 0;min-height:17px;}
-  .readout.on{color:#e8eaed;}
-  #empty{max-width:640px;line-height:1.6;}
-  code{background:#0f1114;padding:2px 6px;border-radius:4px;font-size:12px;}
+  td,th{border:1px solid var(--line);padding:5px 11px;text-align:left;}
+  th{background:var(--panel);color:var(--accent);font-weight:600;}
+  tr{transition:background var(--fast) var(--ease);} tr:hover td{background:#191d24;}
+  .cards{display:flex;flex-wrap:wrap;gap:12px;margin:10px 0;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 17px;
+        min-width:112px;box-shadow:var(--e1);
+        transition:transform var(--med) var(--ease),border-color var(--med) var(--ease),
+                   box-shadow var(--med) var(--ease);}
+  .card:hover{transform:translateY(-2px);border-color:var(--line-hi);box-shadow:var(--e2);}
+  .card .v{font-size:clamp(19px,1vw + 15px,23px);font-weight:600;letter-spacing:-.01em;}
+  .card .k{font-size:12px;color:var(--muted);margin-top:1px;}
+  .note{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:13px;
+        font-size:12px;line-height:1.6;color:var(--accent);}
+  .warn{color:var(--warn);}
+  .thin{color:var(--warn);font-size:12px;margin:4px 0 8px;}
+  svg.chart circle{cursor:pointer;transition:r var(--fast) var(--ease),stroke-width var(--fast) var(--ease);}
+  svg.chart circle:hover{stroke:#fff;stroke-width:1.5;r:4.5;}
+  svg.chart circle[data-sel]{stroke:#fff;stroke-width:2.5;r:5;}
+  svg.chart{box-shadow:var(--e1);transition:border-color var(--med) var(--ease),box-shadow var(--med) var(--ease);}
+  .chartwrap{margin-bottom:16px;}
+  .chartwrap:hover svg.chart{border-color:var(--line-hi);box-shadow:var(--e2);}
+  .readout{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dim);
+           padding:7px 2px 0;min-height:18px;transition:color var(--med) var(--ease);}
+  .readout.on{color:var(--text);animation:ctIn var(--med) var(--ease);}
+  @keyframes ctIn{from{opacity:0;transform:translateY(3px);} to{opacity:1;transform:none;}}
+  .reveal{opacity:0;transform:translateY(14px);
+          transition:opacity 460ms var(--ease),transform 460ms var(--ease);}
+  .reveal.shown{opacity:1;transform:none;}
+  #empty{max-width:640px;line-height:1.7;}
+  a{color:#29b6f6;text-decoration:none;border-bottom:1px solid transparent;
+    transition:border-color var(--fast) var(--ease);}
+  a:hover{border-bottom-color:#29b6f6;}
+  code{background:#0f1114;padding:2px 6px;border-radius:5px;font-size:12px;border:1px solid var(--line);}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px;}
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none !important;transition:none !important;}
+    .reveal{opacity:1;}
+  }
 </style>
 </head>
 <body>
@@ -343,6 +374,7 @@ function render(d) {
 
   document.getElementById('app').innerHTML = h;
   attachPanZoom();
+  revealOnScroll();
 }
 
 // Pan, zoom, and click-to-read. Kept in step with ReportBuilder.chartScript() in
@@ -352,6 +384,41 @@ function render(d) {
 // are three pixels across and hitting one exactly is not realistic on a dense
 // chart. The search radius scales with zoom so it stays constant on screen, and
 // drags are excluded by distance travelled so panning doesn't select anything.
+// Sections fade up once as they enter the viewport. Cheap, and it gives a long
+// report a sense of order rather than dumping everything at once.
+function revealOnScroll() {
+  const targets = [...document.querySelectorAll('h2,.cards,.chartwrap,.who,.vs,.note,.thin')];
+  const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+  const show = el => el.classList.add('shown');
+
+  if (reduced || !('IntersectionObserver' in window)) return;
+
+  // Two frames so layout has settled: the charts are percentage-width and have no
+  // resolved height at end-of-body, so measuring there finds nothing below the
+  // fold. If frames never run, the reveal never applies and everything stays
+  // visible, which is the outcome we want anyway.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+
+  // Only what is below the fold is ever made transparent. Anything already on
+  // screen is left alone, so the page cannot open blank even if the observer
+  // never fires.
+  targets.forEach(el => {
+    if (el.getBoundingClientRect().top >= window.innerHeight) el.classList.add('reveal');
+  });
+
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(en => {
+      if (en.isIntersecting) { show(en.target); io.unobserve(en.target); }
+    });
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
+  targets.forEach(el => { if (el.classList.contains('reveal')) io.observe(el); });
+
+  // Failsafe. A page that never appears is far worse than one that appears
+  // without the animation, so nothing stays hidden if the observer never fires.
+  setTimeout(() => targets.forEach(show), 1200);
+  }));
+}
+
 function attachPanZoom() {
   document.querySelectorAll('svg.chart').forEach(function (svg) {
     const vb = svg.getAttribute('viewBox').split(' ').map(Number);
@@ -416,8 +483,24 @@ function attachPanZoom() {
       if (best && bd <= lim * lim) pick(best); else clearSel();
     });
 
+    // Ease the viewBox back rather than snapping, so the reset reads as a movement
+    // you can follow instead of a jump cut.
+    const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
     svg.addEventListener('dblclick', () => {
-      v = { x: init[0], y: init[1], w: init[2], h: init[3] }; ap(); clearSel();
+      clearSel();
+      if (reduced) { v = { x: init[0], y: init[1], w: init[2], h: init[3] }; ap(); return; }
+      const from = { ...v }, t0 = performance.now();
+      const step = now => {
+        const k = Math.min(1, (now - t0) / 260);
+        const e = 1 - Math.pow(1 - k, 3);
+        v.x = from.x + (init[0] - from.x) * e;
+        v.y = from.y + (init[1] - from.y) * e;
+        v.w = from.w + (init[2] - from.w) * e;
+        v.h = from.h + (init[3] - from.h) * e;
+        ap();
+        if (k < 1) requestAnimationFrame(step);
+      };
+      requestAnimationFrame(step);
     });
   });
 }

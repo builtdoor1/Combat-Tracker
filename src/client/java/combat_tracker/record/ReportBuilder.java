@@ -431,8 +431,35 @@ public final class ReportBuilder {
                 + "if(dd<bd){bd=dd;best=c;}});"
                 + "var lim=14*(v.w/init[2]);"              // constant on screen as you zoom
                 + "if(best&&bd<=lim*lim)pick(best);else clear();});"
-                + "svg.addEventListener('dblclick',function(){v={x:init[0],y:init[1],w:init[2],h:init[3]};ap();clear();});"
-                + "});";
+                + "function ease(a,b,t){return a+(b-a)*t;}"
+                + "svg.addEventListener('dblclick',function(){"
+                + "if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches){"
+                + "v={x:init[0],y:init[1],w:init[2],h:init[3]};ap();clear();return;}"
+                + "var f={x:v.x,y:v.y,w:v.w,h:v.h},t0=performance.now();"
+                + "(function step(now){var k=Math.min(1,(now-t0)/260);"
+                + "var e=1-Math.pow(1-k,3);"                       // ease-out cubic
+                + "v.x=ease(f.x,init[0],e);v.y=ease(f.y,init[1],e);"
+                + "v.w=ease(f.w,init[2],e);v.h=ease(f.h,init[3],e);ap();"
+                + "if(k<1)requestAnimationFrame(step);})(t0);clear();});"
+                + "});"
+                + "var rm=window.matchMedia&&window.matchMedia('(prefers-reduced-motion:reduce)').matches;"
+                + "var targets=[].slice.call(document.querySelectorAll('h2,.cards,.chartwrap,table,.intg'));"
+                + "function show(el){el.classList.add('shown');}"
+                + "if(rm||!('IntersectionObserver' in window)){"
+                + "return;}else{requestAnimationFrame(function(){requestAnimationFrame(function(){"
+                // Only what is below the fold is ever made transparent. Anything already
+                // on screen is left alone, so the report cannot open blank even if the
+                // observer never fires.
+                + "targets.forEach(function(el){"
+                + "if(el.getBoundingClientRect().top>=window.innerHeight)el.classList.add('reveal');});"
+                + "var io=new IntersectionObserver(function(es){es.forEach(function(en){"
+                + "if(en.isIntersecting){show(en.target);io.unobserve(en.target);}});},"
+                + "{rootMargin:'0px 0px -8% 0px',threshold:.05});"
+                + "targets.forEach(function(el){if(el.classList.contains('reveal'))io.observe(el);});"
+                // Failsafe. A report that never appears is far worse than one that
+                // appears without the animation, so nothing stays hidden regardless
+                // of whether the observer ever fires.
+                + "setTimeout(function(){targets.forEach(show);},1200);});});}";
     }
 
     /** Wraps a chart with the readout line that click-to-read writes into. */
@@ -442,27 +469,68 @@ public final class ReportBuilder {
                 + "<div class=\"readout\" data-hint=\"" + hint + "\">" + hint + "</div></div>";
     }
 
+    /**
+     * Styling shared with the online viewer in {@code docs/index.html}.
+     *
+     * <p>Motion is all CSS transform and opacity, which the compositor handles
+     * without a layout pass, and there are no libraries: the report has to open
+     * straight off disk with no network, so a CDN animation library was never an
+     * option. Everything is wrapped in a {@code prefers-reduced-motion} guard.</p>
+     */
     private static String css() {
-        return "body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#14161a;color:#e8eaed;margin:0;padding:24px 32px;}"
-                + "h1{font-size:20px;margin:0 0 4px;}h2{font-size:15px;margin:24px 0 8px;color:#9fb3c8;}"
-                + ".sub{color:#8a93a0;font-size:13px;margin-bottom:12px;line-height:1.5;}"
+        return ":root{--bg:#14161a;--panel:#1c2026;--panel-2:#161a20;--line:#2a2f37;--line-hi:#3d4550;"
+                + "--text:#e8eaed;--muted:#8a93a0;--dim:#5f6772;--accent:#9fb3c8;--warn:#ffb454;"
+                + "--ease:cubic-bezier(.22,.61,.36,1);--fast:140ms;--med:220ms;"
+                + "--e1:0 1px 3px rgba(0,0,0,.30);--e2:0 6px 18px rgba(0,0,0,.38);}"
+                + "*{box-sizing:border-box;}"
+                + "body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text);"
+                + "margin:0;padding:clamp(16px,2.5vw,32px);-webkit-font-smoothing:antialiased;}"
+                + "h1{font-size:clamp(19px,1.4vw+14px,26px);margin:0 0 4px;letter-spacing:-.01em;}"
+                + "h2{font-size:clamp(14px,.5vw+12px,17px);margin:28px 0 8px;color:var(--accent);"
+                + "letter-spacing:.01em;}"
+                + ".sub{color:var(--muted);font-size:13px;margin-bottom:12px;line-height:1.55;}"
                 + "table{border-collapse:collapse;font-size:13px;margin:4px 0;}"
-                + "td,th{border:1px solid #2a2f37;padding:4px 10px;text-align:left;}"
-                + "th{background:#1c2026;color:#9fb3c8;}"
-                + ".cards{display:flex;flex-wrap:wrap;gap:12px;margin:8px 0;}"
-                + ".card{background:#1c2026;border:1px solid #2a2f37;border-radius:8px;padding:10px 16px;min-width:110px;}"
-                + ".card .v{font-size:22px;font-weight:600;}.card .k{font-size:12px;color:#8a93a0;}"
-                + ".intg{background:#161a20;border:1px solid #2a2f37;border-radius:8px;padding:12px;"
+                + "td,th{border:1px solid var(--line);padding:5px 11px;text-align:left;}"
+                + "th{background:var(--panel);color:var(--accent);font-weight:600;}"
+                + "tr{transition:background var(--fast) var(--ease);}tr:hover td{background:#191d24;}"
+                + ".cards{display:flex;flex-wrap:wrap;gap:12px;margin:10px 0;}"
+                + ".card{background:var(--panel);border:1px solid var(--line);border-radius:10px;"
+                + "padding:11px 17px;min-width:112px;box-shadow:var(--e1);"
+                + "transition:transform var(--med) var(--ease),border-color var(--med) var(--ease),"
+                + "box-shadow var(--med) var(--ease);}"
+                + ".card:hover{transform:translateY(-2px);border-color:var(--line-hi);box-shadow:var(--e2);}"
+                + ".card .v{font-size:clamp(19px,1vw+15px,23px);font-weight:600;letter-spacing:-.01em;}"
+                + ".card .k{font-size:12px;color:var(--muted);margin-top:1px;}"
+                + ".intg{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:13px;"
                 + "font-family:ui-monospace,Consolas,monospace;font-size:12px;word-break:break-all;line-height:1.6;}"
-                + ".warn{color:#ffb454;}"
-                + "svg.chart circle{cursor:pointer;}svg.chart circle:hover{stroke:#fff;stroke-width:1.5;}"
-                + "svg.chart circle[data-sel]{stroke:#fff;stroke-width:2;}"
-                + ".chartwrap{margin-bottom:14px;}"
-                + ".readout{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#5f6772;"
-                + "padding:6px 2px 0;min-height:17px;}"
-                + ".readout.on{color:#e8eaed;}"
-                + "details{margin-top:8px;}pre{white-space:pre-wrap;word-break:break-all;background:#0f1114;"
-                + "padding:10px;border-radius:6px;font-size:11px;}";
+                + ".warn{color:var(--warn);}"
+                // Points: grow slightly under the cursor, and the selected one keeps a ring.
+                + "svg.chart circle{cursor:pointer;transition:r var(--fast) var(--ease),"
+                + "stroke-width var(--fast) var(--ease);}"
+                + "svg.chart circle:hover{stroke:#fff;stroke-width:1.5;r:4.5;}"
+                + "svg.chart circle[data-sel]{stroke:#fff;stroke-width:2.5;r:5;}"
+                + ".chartwrap{margin-bottom:16px;}"
+                + "svg.chart{box-shadow:var(--e1);transition:border-color var(--med) var(--ease),"
+                + "box-shadow var(--med) var(--ease);}"
+                + ".chartwrap:hover svg.chart{border-color:var(--line-hi);box-shadow:var(--e2);}"
+                + ".readout{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dim);"
+                + "padding:7px 2px 0;min-height:18px;transition:color var(--med) var(--ease);}"
+                + ".readout.on{color:var(--text);}"
+                // The value swap gets a short lift so a changed reading is noticeable.
+                + "@keyframes ctIn{from{opacity:0;transform:translateY(3px);}to{opacity:1;transform:none;}}"
+                + ".readout.on{animation:ctIn var(--med) var(--ease);}"
+                // Sections fade up once as they scroll in.
+                + ".reveal{opacity:0;transform:translateY(14px);"
+                + "transition:opacity 460ms var(--ease),transform 460ms var(--ease);}"
+                + ".reveal.shown{opacity:1;transform:none;}"
+                + "details{margin-top:8px;}summary{cursor:pointer;transition:color var(--fast) var(--ease);}"
+                + "summary:hover{color:var(--accent);}"
+                + "pre{white-space:pre-wrap;word-break:break-all;background:#0f1114;padding:11px;"
+                + "border-radius:8px;font-size:11px;border:1px solid var(--line);}"
+                + ":focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px;}"
+                // Anyone who has asked the system for less motion gets none of it.
+                + "@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}"
+                + ".reveal{opacity:1;}}";
     }
 
     // ── Formatting ───────────────────────────────────────────────────────────
