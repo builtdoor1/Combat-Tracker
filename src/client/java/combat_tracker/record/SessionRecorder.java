@@ -125,9 +125,9 @@ public class SessionRecorder {
 
     // ── Event intake ──────────────────────────────────────────────────────────
 
-    public void recordJump(int offsetTicks, String result) {
+    public void recordJump(long deltaMs, String result) {
         if (recording) {
-            jumps.add(new SessionData.JEvent(System.currentTimeMillis(), offsetTicks, result));
+            jumps.add(new SessionData.JEvent(System.currentTimeMillis(), deltaMs, result));
         }
     }
 

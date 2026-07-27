@@ -11,146 +11,233 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
 
 /**
- * Jump-reset detection, following
- * <a href="https://github.com/sootysplash/jump-reset">sootysplash's jump-reset</a>.
+ * Core jump-reset detection.
  *
- * <p>Two tick stamps, both read from {@code player.tickCount}: the tick you jumped
- * and the tick you were hit. A reset is <b>perfect when the jump lands on the tick
- * right after the hit</b>, and everything else is a whole number of ticks early or
- * late. That is the entire model.</p>
+ * <p>Run once per client tick. Each tick:
+ * <ol>
+ *   <li><b>Jump</b> is detected from the real {@code jumpFromGround()} call (via
+ *       {@link combat_tracker.mixin.LivingEntityMixin}) — NOT from upward
+ *       velocity, so knockback (e.g. a crit while standing still) can never be
+ *       mistaken for a jump.</li>
+ *   <li><b>Hit</b> is detected client-side: {@code hurtTime} goes 0→+ while the
+ *       invulnerability (regen) timer is active <em>and</em> horizontal knockback
+ *       exceeds a threshold (filters fall / fire / poison).</li>
+ *   <li>Hit and jump are paired through a short tick window, timed with
+ *       {@link System#nanoTime()}. Both are observed on this client's own clock
+ *       and latency delays both equally, so no ping compensation is applied —
+ *       see {@link #handleHit}.</li>
+ * </ol>
  *
- * <p>The earlier version measured a nanosecond delta and scored it against a
- * millisecond window. That was measuring something the game does not have: the
- * knockback is applied on a tick and the jump impulse is applied on a tick, so the
- * millisecond figure was a tick count in disguise and its values piled up on 50ms
- * boundaries.</p>
- *
- * <p>No ping compensation, deliberately. Both stamps come from this client's own
- * tick counter, so latency shifts both equally and cancels. See the note in
- * {@link LatencyEstimator}.</p>
- *
- * <p><b>Kept from before:</b> the knockback filter on what counts as a hit.
- * sootysplash times off any {@code handleDamageEvent}, which includes fall, fire
- * and poison damage. For a report meant to describe PvP, a jump after fall damage
- * is not a jump reset, so a hit still has to carry horizontal knockback.</p>
+ * <p>Only attempts where the player actually jumped are recorded.</p>
  */
 public class JumpResetTracker {
+    /** A jump within this many ticks BEFORE a hit is classified "too early". */
+    private static final int JUMP_LOOKBACK_TICKS = 2;
+    /** Per-result cooldown so one exchange can't spam multiple results. */
+    private static final int RESULT_COOLDOWN_TICKS = 4;
+
+    /**
+     * Attempts further than this from the hit, in either direction, are discarded
+     * rather than scored. A jump a fifth of a second either side of taking damage
+     * is just a jump that happened nearby, not an attempt at a reset, and counting
+     * it drags the statistics around and flattens the chart's axis.
+     */
+    private static final long MAX_ATTEMPT_MS = 200;
+
     /**
      * Minimum horizontal speed just after damage for it to count as a real combat
      * hit. Fall, fire and poison impart no horizontal knockback and land far below
-     * this; a melee hit lands far above it. Hardcoded so a stale or hand-edited
-     * config.json can't skew what counts as a hit.
+     * this; a melee hit lands far above it, so the gap is wide and there is no
+     * better value to pick. Hardcoded — like {@link ComboTracker}'s combo gap — so
+     * a stale or hand-edited config.json can't skew what counts as a hit.
      */
     private static final double KNOCKBACK_THRESHOLD = 0.065;
 
     /**
-     * A jump older than this stops being considered against any hit, matching
-     * sootysplash's 2500ms staleness on the last jump.
+     * Ticks after a grounded hit during which a jump still counts as an attempt.
+     * Six ticks (~300ms) is comfortably past any human reaction time while staying
+     * short enough that an unrelated later jump isn't swept in.
      */
-    private static final long JUMP_STALE_MS = 2500L;
+    private static final int WINDOW_TICKS_GROUND = 6;
 
-    /** Sentinel for "no tick recorded yet". */
-    private static final int NONE = Integer.MIN_VALUE;
+    /**
+     * Airborne hits get a longer window: you cannot jump until you land, so the
+     * clock has to keep running through the fall.
+     */
+    private static final int WINDOW_TICKS_AIR = 10;
 
-    private int jumpTick = NONE;
-    private long jumpAtMs = 0L;
-    private int hurtTick = NONE;
+    private enum State { IDLE, WINDOW_ACTIVE }
 
-    /** The hit already scored, so one hit yields at most one recorded attempt. */
-    private int scoredHurtTick = NONE;
+    private State state = State.IDLE;
+
+    private int currentTick = 0;
+    private int lastResultTick = Integer.MIN_VALUE / 2;
+    private int lastJumpTick = Integer.MIN_VALUE / 2;
+    private long lastJumpNano = 0L;
+
+    // Open hit-window snapshot
+    private int hitTick = 0;
+    private long hitNano = 0L;
+    private boolean hitWasGrounded = true;
 
     private final LatencyEstimator latency = LatencyEstimator.get();
 
     // Per-tick carry-overs
     private int prevHurtTime = 0;
+    private boolean prevOnGround = true;
 
     public void tick(Minecraft client) {
+        currentTick++;
+
         LocalPlayer player = client.player;
         if (player == null) {
             reset();
             return;
         }
 
-        latency.sample(client);
+        long tickNano = System.nanoTime();
 
+        // ── Sample this tick's state ──────────────────────────────────────────
         double vx = player.getDeltaMovement().x;
         double vz = player.getDeltaMovement().z;
         double horizMag = Math.sqrt(vx * vx + vz * vz);
+        boolean onGround = player.onGround();
         int hurtTime = player.hurtTime;
         int invulnTime = player.invulnerableTime;
+        latency.sample(client);
 
-        // ── Jump: recorded by the mixin on the real jumpFromGround call ───────
-        int jumpedAt = CombatTrackerClient.consumeJumpTick();
-        if (jumpedAt != NONE) {
-            jumpTick = jumpedAt;
-            jumpAtMs = System.currentTimeMillis();
+        // ── Jump detection (real jumpFromGround call) ─────────────────────────
+        long jumpSignalNano = CombatTrackerClient.consumeJumpNano();
+        boolean jumpNow = jumpSignalNano != 0L;
+        if (jumpNow) {
+            lastJumpTick = currentTick;
+            lastJumpNano = jumpSignalNano;
         }
 
-        // ── Hit: hurtTime rising while invulnerable, with horizontal knockback ─
-        boolean hitNow = prevHurtTime == 0 && hurtTime > 0 && invulnTime > 0
+        // ── Hit detection (hurtTime + regen + horizontal knockback) ───────────
+        boolean hitNow = prevHurtTime == 0
+                && hurtTime > 0
+                && invulnTime > 0
                 && horizMag > KNOCKBACK_THRESHOLD;
         if (hitNow) {
-            hurtTick = player.tickCount;
+            handleHit(tickNano);
         }
-        prevHurtTime = hurtTime;
 
-        evaluate();
+        // ── Close an expired window (player never jumped → not an attempt) ────
+        if (state == State.WINDOW_ACTIVE) {
+            int maxTicks = hitWasGrounded ? WINDOW_TICKS_GROUND : WINDOW_TICKS_AIR;
+            if (currentTick - hitTick > maxTicks) {
+                state = State.IDLE;
+            }
+        }
+
+        // ── Score a jump that lands inside an open window ─────────────────────
+        if (jumpNow && state == State.WINDOW_ACTIVE && readyForResult()) {
+            double ms = (lastJumpNano - hitNano) / 1_000_000.0;
+            registerAttempt(ms);
+            state = State.IDLE;
+        }
+
+        prevHurtTime = hurtTime;
+        prevOnGround = onGround;
     }
 
-    /**
-     * Scores the current jump/hit pair if there is one worth scoring.
-     *
-     * <p>Runs every tick rather than only on a jump so that both orderings are
-     * caught: jumping after the hit (late) and jumping before it (early), which is
-     * only knowable once the hit arrives.</p>
-     */
-    private void evaluate() {
-        if (jumpTick == NONE || hurtTick == NONE || hurtTick == scoredHurtTick) {
+    private void handleHit(long tickNano) {
+        // Use the precise hit time from the mixin; fall back to the tick time.
+        //
+        // NO latency compensation, deliberately. An earlier version wound this
+        // timestamp back by the estimated one-way latency, which is wrong: the jump
+        // is timed on the client clock, so subtracting latency from only the hit
+        // mixes a server-frame time with a client-frame one and adds a flat bias of
+        // half the ping to every result. At 120ms that is +60ms — most of the
+        // success window — so real resets scored as TOO_LATE.
+        //
+        // Both events are observed on this client's own tick clock, and latency
+        // delays both equally, so it cancels out on its own. Knockback is applied
+        // when the client receives it, which is the same moment hurtTime flips, so
+        // the physics being measured are local too.
+        long hitAtNano = CombatTrackerClient.hitNano != 0L ? CombatTrackerClient.hitNano : tickNano;
+
+        int ticksSinceJump = currentTick - lastJumpTick;
+
+        // A real jump on this tick (same-tick reset) or 1–2 ticks before the hit:
+        // pair them and use the actual signed sub-tick delta (jump − hit).
+        if (ticksSinceJump >= 0 && ticksSinceJump <= JUMP_LOOKBACK_TICKS && readyForResult()) {
+            registerAttempt((lastJumpNano - hitAtNano) / 1_000_000.0);
+            state = State.IDLE;
             return;
         }
-        if (System.currentTimeMillis() - jumpAtMs > JUMP_STALE_MS) {
-            return; // the jump is too old to be about this hit
+
+        // NORMAL: open (or restart) a timing window for an upcoming jump.
+        if (state == State.WINDOW_ACTIVE) {
+            hitTick = currentTick;
+            hitNano = hitAtNano;
+            hitWasGrounded = prevOnGround;
+        } else if (state == State.IDLE && readyForResult()) {
+            hitTick = currentTick;
+            hitNano = hitAtNano;
+            hitWasGrounded = prevOnGround;
+            state = State.WINDOW_ACTIVE;
         }
-        TimingWindow window = CtConfig.get().window;
-        if (!window.isAttempt(jumpTick, hurtTick)) {
-            return; // unrelated jump and hit, not an attempt at a reset
-        }
-        scoredHurtTick = hurtTick;
-        registerAttempt(TimingWindow.offset(jumpTick, hurtTick));
     }
 
-    private void registerAttempt(int offsetTicks) {
+    private boolean readyForResult() {
+        return currentTick - lastResultTick >= RESULT_COOLDOWN_TICKS;
+    }
+
+    private void registerAttempt(double ms) {
+        long delta = Math.round(ms);
+        if (Math.abs(delta) > MAX_ATTEMPT_MS) {
+            return; // not a reset attempt, just a jump that happened near a hit
+        }
+        lastResultTick = currentTick;
+
         TimingWindow window = CtConfig.get().window;
-        TimingWindow.Result result = window.classify(offsetTicks);
-        boolean success = result.success();
+        TimingWindow.Result result = window.classify(delta);
+        boolean success = result == TimingWindow.Result.SUCCESS;
 
         StatsTracker stats = StatsTracker.get();
-        stats.record(offsetTicks, success);
-        SessionRecorder.get().recordJump(offsetTicks, result.name());
+        stats.record(delta, success);
+        SessionRecorder.get().recordJump(delta, result.name());
 
-        String label = TimingWindow.describe(offsetTicks);
-        int color = success ? 0xFF55FF55 : 0xFFFF5555;
-        stats.setLastResult(label, color);
+        String hudText;
+        int color;
+        String chatText;
+        switch (result) {
+            case SUCCESS -> {
+                hudText = "HIT +" + delta + "ms";
+                color = 0xFF55FF55;
+                chatText = "Jump reset HIT! (+" + delta + "ms)";
+            }
+            case TOO_LATE -> {
+                hudText = "MISS too late (+" + delta + "ms)";
+                color = 0xFFFF5555;
+                chatText = "Jump reset MISS - too late (+" + delta + "ms)";
+            }
+            default -> { // TOO_EARLY
+                hudText = "MISS too early (" + delta + "ms)";
+                color = 0xFFFF5555;
+                chatText = "Jump reset MISS - too early (" + delta + "ms)";
+            }
+        }
+        stats.setLastResult(hudText, color);
         stats.save();
 
         if (CtConfig.get().chatEnabled) {
             LocalPlayer p = Minecraft.getInstance().player;
             if (p != null) {
                 ChatFormatting fmt = success ? ChatFormatting.GREEN : ChatFormatting.RED;
-                String msg = success
-                        ? "Jump reset " + label
-                        : "Jump reset " + label + " (" + (offsetTicks < 0 ? "jumped early" : "jumped late") + ")";
-                p.displayClientMessage(Component.literal("[Combat Tracker] " + msg).withStyle(fmt), false);
+                p.displayClientMessage(Component.literal("[Combat Tracker] " + chatText).withStyle(fmt), false);
             }
         }
     }
 
     private void reset() {
-        jumpTick = NONE;
-        hurtTick = NONE;
-        scoredHurtTick = NONE;
-        jumpAtMs = 0L;
+        state = State.IDLE;
         prevHurtTime = 0;
+        prevOnGround = true;
+        lastJumpTick = Integer.MIN_VALUE / 2;
+        lastJumpNano = 0L;
         latency.reset();
     }
 }

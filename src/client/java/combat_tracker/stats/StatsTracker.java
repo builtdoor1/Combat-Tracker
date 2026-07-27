@@ -27,14 +27,14 @@ public class StatsTracker {
     private static StatsTracker instance;
 
     /**
-     * Bumped when stored attempts stop meaning what they used to. Version 1 held
-     * millisecond deltas; from 2 they are tick offsets, and the two cannot be mixed
-     * in one distribution, so an older file's attempts are dropped rather than
-     * silently averaged together with the new ones.
+     * Marks what unit the stored attempts are in. Absent or 1 means milliseconds,
+     * which is what this build records. Version 1.6.0 briefly stored tick offsets
+     * and wrote 2 here; those cannot be read as milliseconds, and loading them
+     * without checking would silently turn every attempt into 0 ms.
      */
-    private static final int CURRENT_FORMAT = 2;
+    private static final int MS_FORMAT = 1;
 
-    public int format = CURRENT_FORMAT;
+    public int format = MS_FORMAT;
 
     /** Persisted: the full distribution of attempts. */
     public List<Attempt> attempts = new ArrayList<>();
@@ -78,13 +78,13 @@ public class StatsTracker {
         if (s.attempts == null) {
             s.attempts = new ArrayList<>();
         }
-        if (s.format < CURRENT_FORMAT && !s.attempts.isEmpty()) {
-            LOGGER.info("Clearing {} jump-reset attempts recorded in milliseconds; "
-                    + "timing is measured in ticks now and the two cannot be combined.",
+        if (s.format > MS_FORMAT && !s.attempts.isEmpty()) {
+            LOGGER.info("Clearing {} jump-reset attempts recorded as tick offsets; "
+                    + "timing is measured in milliseconds again and the two cannot be combined.",
                     s.attempts.size());
             s.attempts.clear();
         }
-        s.format = CURRENT_FORMAT;
+        s.format = MS_FORMAT;
         s.recompute();
         return s;
     }
@@ -106,18 +106,18 @@ public class StatsTracker {
             if (a.success) {
                 successes++;
             }
-            sumDelta += a.offsetTicks;
-            sumDeltaSq += (double) a.offsetTicks * a.offsetTicks;
+            sumDelta += a.deltaMs;
+            sumDeltaSq += (double) a.deltaMs * a.deltaMs;
         }
     }
 
-    public void record(int offsetTicks, boolean success) {
-        attempts.add(new Attempt(offsetTicks, success, System.currentTimeMillis()));
+    public void record(long deltaMs, boolean success) {
+        attempts.add(new Attempt(deltaMs, success, System.currentTimeMillis()));
         if (success) {
             successes++;
         }
-        sumDelta += offsetTicks;
-        sumDeltaSq += (double) offsetTicks * offsetTicks;
+        sumDelta += deltaMs;
+        sumDeltaSq += (double) deltaMs * deltaMs;
     }
 
     public void reset() {

@@ -33,13 +33,11 @@ public final class SharePayload {
     /**
      * Bump only for an incompatible layout change; the viewer decodes each version.
      *
-     * <p>v2 added ping and the successful-reset summary. v3 changed jump-reset
-     * timing from milliseconds to tick offsets, which is a change of meaning rather
-     * than of layout, so the viewer must label old links in ms and new ones in
-     * ticks. Older links stay readable: the viewer branches on this byte, which is
-     * the whole reason it is written first.</p>
+     * <p>v2 added median ping and the successful-reset summary. v1 links stay
+     * readable — the viewer branches on this byte, which is the whole reason it is
+     * written first.</p>
      */
-    private static final int FORMAT_VERSION = 3;
+    private static final int FORMAT_VERSION = 2;
 
     /** Leaves room for surrounding text in a 2000-character Discord message. */
     public static final int DEFAULT_MAX_CHARS = 1800;
@@ -128,8 +126,8 @@ public final class SharePayload {
         // Summaries: always exact, always over every event.
         b.varInt(d.jumpAttempts);
         b.varInt(d.jumpHits);
-        b.cent(d.jumpAvgTicks);
-        b.cent(d.jumpSdTicks);
+        b.cent(d.jumpAvgMs);
+        b.cent(d.jumpSdMs);
         // v2 additions
         b.varInt((int) Math.round(Math.max(0, d.pingMs)));
         b.cent(d.hitAvgMs);
@@ -161,7 +159,7 @@ public final class SharePayload {
         for (SessionData.JEvent j : js) {
             b.varLong(Math.max(0, j.t - prev));
             prev = j.t;
-            b.zig(((long) j.offsetTicks << 2) | resultCode(j.result));
+            b.zig((j.deltaMs << 2) | resultCode(j.result));
         }
 
         List<SessionData.CEvent> cs = sample(d.comboEvents, limit);
@@ -192,7 +190,7 @@ public final class SharePayload {
     }
 
     private static int resultCode(String result) {
-        if ("PERFECT".equals(result)) {
+        if ("SUCCESS".equals(result)) {
             return 0;
         }
         return "TOO_EARLY".equals(result) ? 1 : 2;

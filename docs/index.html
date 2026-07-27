@@ -79,7 +79,7 @@ async function inflateRaw(bytes) {
 function decode(raw) {
   const r = new Reader(raw);
   const version = r.u8();
-  if (version < 1 || version > 3) {
+  if (version < 1 || version > 2) {
     throw new Error('This link uses format version ' + version + ', which this page cannot read yet.');
   }
 
@@ -95,10 +95,7 @@ function decode(raw) {
   for (let i = 0; i < oc; i++) d.opponents.push(r.str());
 
   d.jumpAttempts = r.varLong(); d.jumpHits = r.varLong();
-  // v3 moved jump timing from milliseconds to tick offsets. Same slots, different
-  // meaning, so the unit has to follow the version through to the labels.
-  d.jumpAvg = r.cent();         d.jumpSd = r.cent();
-  d.jumpUnit = version >= 3 ? 'ticks' : 'ms';
+  d.jumpAvgMs = r.cent();       d.jumpSdMs = r.cent();
   if (version >= 2) {
     d.pingMs = r.varLong();
     r.cent(); r.cent();   // hitAvgMs / hitSdMs, retained in the format
@@ -273,18 +270,6 @@ function chartBlock(svg) {
   return `<div class="chartwrap">${svg}<div class="readout" data-hint="${CHART_HINT}">${CHART_HINT}</div></div>`;
 }
 
-function unitSuffix(d) { return d.jumpUnit === 'ticks' ? 't' : ' ms'; }
-
-// v3 links carry tick offsets ("Perfect", "2t late"); older ones carry a
-// millisecond delta and keep their original wording.
-function describeJump(p, d) {
-  if (d.jumpUnit !== 'ticks') {
-    return `${p.delta} ms (${['SUCCESS', 'TOO_EARLY', 'TOO_LATE'][p.code]})`;
-  }
-  if (p.delta === 0) return 'Perfect (0t)';
-  return `${Math.abs(p.delta)}t ${p.delta < 0 ? 'early' : 'late'}`;
-}
-
 function card(v, k) { return `<div class="card"><div class="v">${v}</div><div class="k">${k}</div></div>`; }
 
 function thinNote(shown, total, what) {
@@ -313,22 +298,14 @@ function render(d) {
        `double-click to reset.</div>`;
 
   h += `<h2>Jump resets</h2><div class="cards">` +
-       card(d.jumpAttempts, 'attempts') +
-       card(d.jumpHits, d.jumpUnit === 'ticks' ? 'perfect' : 'hits') +
-       card(d.jumpAttempts - d.jumpHits, d.jumpUnit === 'ticks' ? 'off' : 'misses') +
-       card(f2(d.jumpAvg) + unitSuffix(d), d.jumpUnit === 'ticks' ? 'avg offset' : 'avg delta') +
-       card(f2(d.jumpSd) + unitSuffix(d), 'std dev') + `</div>`;
-  if (d.jumpUnit === 'ticks') {
-    h += `<div class="sub">Ticks from the ideal reset tick. 0 is perfect, negative jumped early, ` +
-         `positive jumped late.</div>`;
-  }
+       card(d.jumpAttempts, 'attempts') + card(d.jumpHits, 'hits') +
+       card(d.jumpAttempts - d.jumpHits, 'misses') +
+       card(f2(d.jumpAvgMs) + ' ms', 'avg delta') + card(f2(d.jumpSdMs) + ' ms', 'std dev') + `</div>`;
   h += thinNote(d.jumps.length, d.jumpTotal, 'attempts');
-  h += chartBlock(seriesChart(
-    d.jumpUnit === 'ticks' ? 'Jump-reset offset over time (ticks)' : 'Jump-reset delta over time (ms)',
-    d.jumps, d, {
-      value: p => p.delta, color: p => p.code === 0 ? HIT : MISS, unit: d.jumpUnit,
-      tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${describeJump(p, dd)}`,
-    }));
+  h += chartBlock(seriesChart('Jump-reset delta over time (ms)', d.jumps, d, {
+    value: p => p.delta, color: p => p.code === 0 ? HIT : MISS, unit: 'ms',
+    tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${p.delta} ms (${['SUCCESS', 'TOO_EARLY', 'TOO_LATE'][p.code]})`,
+  }));
 
   h += `<h2>Combo timing</h2><div class="cards">` +
        card(d.combos, 'combos') + card(d.comboIntervals, 'intervals') +

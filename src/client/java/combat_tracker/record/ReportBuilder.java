@@ -71,14 +71,12 @@ public final class ReportBuilder {
     private static void jumpSection(StringBuilder s, SessionData d) {
         s.append("<h2>Jump resets</h2><div class=\"cards\">");
         card(s, Integer.toString(d.jumpAttempts), "attempts");
-        card(s, Integer.toString(d.jumpHits), "perfect");
-        card(s, Integer.toString(d.jumpMisses), "off");
-        card(s, fmt(d.jumpAvgTicks) + "t", "avg offset");
-        card(s, fmt(d.jumpSdTicks) + "t", "std dev");
+        card(s, Integer.toString(d.jumpHits), "hits");
+        card(s, Integer.toString(d.jumpMisses), "misses");
+        card(s, fmt(d.jumpAvgMs) + " ms", "avg delta");
+        card(s, fmt(d.jumpSdMs) + " ms", "std dev");
         s.append("</div>");
-        s.append("<div class=\"sub\">Ticks from the ideal reset tick. 0 is perfect, negative jumped early, "
-                + "positive jumped late.</div>");
-        s.append(chartBlock(timeChart("Jump-reset offset over time (ticks)", d.jumpEvents, d.startEpochMs, d.endEpochMs)));
+        s.append(chartBlock(timeChart("Jump-reset delta over time (ms)", d.jumpEvents, d.startEpochMs, d.endEpochMs)));
     }
 
     private static void comboSection(StringBuilder s, SessionData d) {
@@ -143,22 +141,23 @@ public final class ReportBuilder {
         }
         double yMin = 0, yMax = 1;
         for (SessionData.JEvent p : pts) {
-            yMax = Math.max(yMax, p.offsetTicks);
-            yMin = Math.min(yMin, p.offsetTicks);
+            yMax = Math.max(yMax, p.deltaMs);
+            yMin = Math.min(yMin, p.deltaMs);
         }
         yMax = yMax * 1.1 + 1;
         long span = Math.max(1, endMs - startMs);
-        axes(s, yMin, yMax, "ticks");
+        axes(s, yMin, yMax, "ms");
 
         int pw = W - ML - MR, ph = H - MT - MB;
         StringBuilder poly = new StringBuilder();
         StringBuilder dots = new StringBuilder();
         for (SessionData.JEvent p : pts) {
             int x = (int) (ML + (double) (p.t - startMs) / span * pw);
-            int y = (int) (MT + ph - (p.offsetTicks - yMin) / (yMax - yMin) * ph);
+            int y = (int) (MT + ph - (p.deltaMs - yMin) / (yMax - yMin) * ph);
             poly.append(x).append(",").append(y).append(" ");
-            boolean ok = "PERFECT".equals(p.result);
-            String tip = offset(p.t - startMs) + " : " + describeTicks(p.offsetTicks);
+            boolean ok = "SUCCESS".equals(p.result);
+            String tip = offset(p.t - startMs) + " : " + p.deltaMs + " ms"
+                    + (p.result != null ? " (" + p.result + ")" : "");
             dot(dots, x, y, ok ? HIT_COLOR : MISS_COLOR, tip);
         }
         s.append("<polyline points=\"").append(poly.toString().trim())
@@ -179,7 +178,7 @@ public final class ReportBuilder {
         }
         yMax = yMax * 1.1 + 1;
         long span = Math.max(1, d.endEpochMs - d.startEpochMs);
-        axes(s, yMin, yMax, "ticks");
+        axes(s, yMin, yMax, "ms");
 
         int pw = W - ML - MR, ph = H - MT - MB;
         StringBuilder poly = new StringBuilder();
@@ -471,14 +470,6 @@ public final class ReportBuilder {
     private static void card(StringBuilder s, String value, String key) {
         s.append("<div class=\"card\"><div class=\"v\">").append(value).append("</div><div class=\"k\">")
                 .append(key).append("</div></div>");
-    }
-
-    /** "Perfect", "2t late", "1t early" for a chart tooltip. */
-    private static String describeTicks(int offsetTicks) {
-        if (offsetTicks == 0) {
-            return "Perfect (0t)";
-        }
-        return Math.abs(offsetTicks) + "t " + (offsetTicks < 0 ? "early" : "late");
     }
 
     private static String offset(long ms) {
