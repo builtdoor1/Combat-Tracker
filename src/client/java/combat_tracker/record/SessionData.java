@@ -53,9 +53,10 @@ public final class SessionData {
     public double pingMs;
 
     // ── Successful resets only ───────────────────────────────────────────────
-    // Tracked separately because misses can be hundreds of milliseconds out and
-    // would otherwise stretch the axis until the successes — the numbers that
-    // actually demonstrate human spread — are squashed into a few pixels.
+    // No longer rendered: the report shows every attempt on one chart, which is
+    // readable now that attempts past 200ms are discarded rather than scored.
+    // Still computed and still written to share-link format v2, because that
+    // format is already public and its field order cannot change.
     public double hitAvgMs;
     public double hitSdMs;
     public long hitMinMs;

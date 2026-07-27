@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Combat Tracker &mdash; Session</title>
+<title>Combat Tracker Session</title>
 <style>
-  body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#14161a;color:#e8eaed;margin:0;padding:24px;}
+  body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:#14161a;color:#e8eaed;margin:0;padding:24px 32px;}
   h1{font-size:20px;margin:0 0 4px;}
   h2{font-size:15px;margin:24px 0 8px;color:#9fb3c8;}
-  .sub{color:#8a93a0;font-size:13px;margin-bottom:16px;max-width:760px;line-height:1.5;}
+  .sub{color:#8a93a0;font-size:13px;margin-bottom:12px;line-height:1.5;}
   .who{display:flex;align-items:center;gap:12px;margin:12px 0 4px;flex-wrap:wrap;}
   .who img{width:48px;height:48px;image-rendering:pixelated;border-radius:6px;background:#1c2026;}
   .who .ign{font-size:22px;font-weight:600;}
@@ -21,11 +21,15 @@
   .card{background:#1c2026;border:1px solid #2a2f37;border-radius:8px;padding:10px 16px;min-width:110px;}
   .card .v{font-size:22px;font-weight:600;}
   .card .k{font-size:12px;color:#8a93a0;}
-  .note{background:#161a20;border:1px solid #2a2f37;border-radius:8px;padding:12px;font-size:12px;
-        max-width:760px;line-height:1.6;color:#9fb3c8;}
+  .note{background:#161a20;border:1px solid #2a2f37;border-radius:8px;padding:12px;font-size:12px;line-height:1.6;color:#9fb3c8;}
   .warn{color:#ffb454;}
   .thin{color:#ffb454;font-size:12px;margin:4px 0 8px;}
-  circle:hover{stroke:#fff;stroke-width:1.5;}
+  svg.chart circle{cursor:pointer;}
+  svg.chart circle:hover{stroke:#fff;stroke-width:1.5;}
+  svg.chart circle[data-sel]{stroke:#fff;stroke-width:2;}
+  .chartwrap{margin-bottom:14px;}
+  .readout{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#5f6772;padding:6px 2px 0;min-height:17px;}
+  .readout.on{color:#e8eaed;}
   #empty{max-width:640px;line-height:1.6;}
   code{background:#0f1114;padding:2px 6px;border-radius:4px;font-size:12px;}
 </style>
@@ -94,8 +98,8 @@ function decode(raw) {
   d.jumpAvgMs = r.cent();       d.jumpSdMs = r.cent();
   if (version >= 2) {
     d.pingMs = r.varLong();
-    d.hitAvgMs = r.cent(); d.hitSdMs = r.cent();
-    d.hitMinMs = r.zig();  d.hitMaxMs = r.zig();
+    r.cent(); r.cent();   // hitAvgMs / hitSdMs, retained in the format
+    r.zig();  r.zig();    // hitMinMs / hitMaxMs
   }
   d.combos = r.varLong();       d.comboIntervals = r.varLong();
   d.comboAvgMs = r.cent();      d.comboJitterMs = r.cent();
@@ -134,26 +138,15 @@ function decode(raw) {
     d.swingList.push({ t, reach, aimDeg, offX, offY, hit: packed % 2 === 1, target: Math.floor(packed / 2) - 1 });
   }
 
-  // v1 links carry no successful-reset summary. Derive it from the plotted hits so
-  // old links still get the chart — approximate, and labelled as such below.
-  if (version < 2) {
-    const hits = d.jumps.filter(j => j.code === 0).map(j => j.delta);
-    d.pingMs = null;
-    d.derivedHitStats = true;
-    if (hits.length) {
-      const mean = hits.reduce((a, b) => a + b, 0) / hits.length;
-      const varr = hits.reduce((a, b) => a + (b - mean) * (b - mean), 0) / hits.length;
-      d.hitAvgMs = mean; d.hitSdMs = Math.sqrt(varr);
-      d.hitMinMs = Math.min(...hits); d.hitMaxMs = Math.max(...hits);
-    } else {
-      d.hitAvgMs = 0; d.hitSdMs = 0; d.hitMinMs = 0; d.hitMaxMs = 0;
-    }
-  }
+  // v1 links predate the ping field. The hit* fields are still read above for
+  // v2 so the reader stays in sync, but nothing renders them any more.
+  if (version < 2) d.pingMs = null;
+
   return d;
 }
 
 // ── Chart drawing ──────────────────────────────────────────────────────────
-const W = 720, H = 260, ML = 48, MR = 16, MT = 28, MB = 30;
+const W = 1400, H = 300, ML = 48, MR = 16, MT = 28, MB = 30;
 const PW = W - ML - MR, PH = H - MT - MB;
 
 function esc(s) {
@@ -161,8 +154,10 @@ function esc(s) {
 }
 function f2(v) { return Number(v).toFixed(2); }
 
-function svgOpen(w, h) {
-  return `<svg class="chart" viewBox="0 0 ${w} ${h}" width="100%" style="max-width:${w + 40}px;` +
+// maxW caps the scatter, which looks wrong stretched. Time-series charts fill
+// the page: the wider they are, the more millisecond detail is readable.
+function svgOpen(w, h, maxW) {
+  return `<svg class="chart" viewBox="0 0 ${w} ${h}" width="100%" style="${maxW ? `max-width:${maxW}px;` : ''}` +
          `background:#161a20;border:1px solid #2a2f37;border-radius:8px;cursor:grab;touch-action:none;">`;
 }
 function chartTitle(text) {
@@ -237,37 +232,10 @@ function seriesChart(title, pts, d, opts) {
   return s + dots + '</svg>';
 }
 
-// Successful resets only, axis fitted to the data rather than to zero — a few
-// milliseconds of spread has to be visible or the chart says nothing.
-function hitsChart(d) {
-  const hits = d.jumps.filter(j => j.code === 0);
-  let s = svgOpen(W, H) + chartTitle('Successful jump-reset timing (ms)');
-  if (!hits.length) return s + noData(W, H);
-
-  const lo = d.hitMinMs, hi = d.hitMaxMs;
-  const pad = Math.max(2, (hi - lo) * 0.15);
-  const yMin = lo - pad, yMax = hi + pad;
-  const span = Math.max(1, d.endEpochMs - d.startEpochMs);
-  s += axes(yMin, yMax, 'ms');
-
-  const meanY = MT + PH - (d.hitAvgMs - yMin) / (yMax - yMin) * PH;
-  s += `<line x1="${ML}" y1="${meanY.toFixed(1)}" x2="${ML + PW}" y2="${meanY.toFixed(1)}" stroke="#9fb3c8" ` +
-       `stroke-width="1" stroke-dasharray="3 3" stroke-opacity="0.7"/>` +
-       `<text x="${ML + PW}" y="${(meanY - 4).toFixed(1)}" fill="#9fb3c8" font-size="10" text-anchor="end" ` +
-       `font-family="sans-serif">mean ${f2(d.hitAvgMs)} ms</text>`;
-
-  for (const j of hits) {
-    const x = ML + (j.t - d.startEpochMs) / span * PW;
-    const y = MT + PH - (j.delta - yMin) / (yMax - yMin) * PH;
-    s += dot(x, y, HIT, `${tOff(j.t - d.startEpochMs)} : ${j.delta} ms`);
-  }
-  return s + '</svg>';
-}
-
 function aimScatter(d) {
   const w = 420, h = 460, ml = 44, mr = 16, mt = 28, mb = 34;
   const pw = w - ml - mr, ph = h - mt - mb;
-  let s = svgOpen(w, h) + chartTitle('Aim offset from hitbox centre (blocks)');
+  let s = svgOpen(w, h, 520) + chartTitle('Aim offset from hitbox centre (blocks)');
   if (!d.swingList.length) return s + noData(w, h);
 
   let halfW = HB_W * 1.6, halfH = HB_H * 1.25;
@@ -296,11 +264,17 @@ function aimScatter(d) {
 }
 
 // ── Page ───────────────────────────────────────────────────────────────────
+// Wraps a chart with the readout line that click-to-read writes into.
+const CHART_HINT = "Click anywhere on the chart for the nearest point's exact value.";
+function chartBlock(svg) {
+  return `<div class="chartwrap">${svg}<div class="readout" data-hint="${CHART_HINT}">${CHART_HINT}</div></div>`;
+}
+
 function card(v, k) { return `<div class="card"><div class="v">${v}</div><div class="k">${k}</div></div>`; }
 
 function thinNote(shown, total, what) {
   if (shown >= total) return '';
-  return `<div class="thin">Graph shows ${shown} of ${total} ${what} &mdash; the link carries an evenly spaced ` +
+  return `<div class="thin">Graph shows ${shown} of ${total} ${what}  the link carries an evenly spaced ` +
          `sample so it stays short enough to send. The figures above are computed over all ${total}.</div>`;
 }
 
@@ -313,93 +287,94 @@ function render(d) {
   const dur = Math.max(0, Math.floor(d.durationMs / 1000));
   const started = new Date(d.startEpochMs).toISOString().replace('T', ' ').replace(/\..+/, ' UTC');
 
-  let h = `<h1>Combat Tracker &mdash; Session Report</h1>`;
+  let h = `<h1>Combat Tracker Session Report</h1>`;
   h += `<div class="who">${head(d.playerUuid || d.player, 48)}<span class="ign">${esc(d.player)}</span></div>`;
   if (d.opponents.length) {
     h += `<div class="vs">vs ${d.opponents.map(o => head(o, 24) + ' ' + esc(o)).join(' &nbsp; ')}</div>`;
   }
   h += `<div class="sub">${esc(started)} &middot; ${Math.floor(dur / 60)}m ${dur % 60}s` +
        (d.pingMs != null ? ` &middot; ${Math.round(d.pingMs)} ms ping` : '') +
-       ` &middot; charts: scroll to zoom, drag to pan, double-click to reset.</div>`;
+       ` &middot; charts: <b>click a point for its exact value</b>, scroll to zoom, drag to pan, ` +
+       `double-click to reset.</div>`;
 
-  h += `<h2>Jump resets &mdash; successful</h2><div class="cards">` +
-       card(d.jumpHits, 'hits') + card(f2(d.hitAvgMs) + ' ms', 'avg') +
-       card(f2(d.hitSdMs) + ' ms', 'std dev') +
-       card(d.hitMinMs + ' &ndash; ' + d.hitMaxMs + ' ms', 'range') + `</div>`;
-  h += `<div class="sub">Only the resets that landed inside the success window, on an axis scaled to them alone ` +
-       `&mdash; misses run hundreds of milliseconds out and would otherwise flatten this into a line. ` +
-       `<b>The scatter here is the evidence</b>: a human's timing wanders, an auto-reset repeats the same few ` +
-       `milliseconds.</div>`;
-  if (d.derivedHitStats) {
-    h += `<div class="thin">This link predates the successful-reset summary, so these four figures are derived ` +
-         `from the plotted points rather than from every attempt. Re-record for exact ones.</div>`;
-  }
-  h += hitsChart(d);
-
-  h += `<h2>Jump resets &mdash; every attempt</h2><div class="cards">` +
+  h += `<h2>Jump resets</h2><div class="cards">` +
        card(d.jumpAttempts, 'attempts') + card(d.jumpHits, 'hits') +
        card(d.jumpAttempts - d.jumpHits, 'misses') +
        card(f2(d.jumpAvgMs) + ' ms', 'avg delta') + card(f2(d.jumpSdMs) + ' ms', 'std dev') + `</div>`;
-  h += `<div class="sub">The full picture including misses, so nothing is hidden by the chart above.</div>`;
   h += thinNote(d.jumps.length, d.jumpTotal, 'attempts');
-  h += seriesChart('Jump-reset delta over time (ms)', d.jumps, d, {
+  h += chartBlock(seriesChart('Jump-reset delta over time (ms)', d.jumps, d, {
     value: p => p.delta, color: p => p.code === 0 ? HIT : MISS, unit: 'ms',
     tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${p.delta} ms (${['SUCCESS', 'TOO_EARLY', 'TOO_LATE'][p.code]})`,
-  });
+  }));
 
   h += `<h2>Combo timing</h2><div class="cards">` +
        card(d.combos, 'combos') + card(d.comboIntervals, 'intervals') +
        card(f2(d.comboAvgMs) + ' ms', 'avg interval') + card(f2(d.comboJitterMs) + ' ms', 'jitter (SD)') + `</div>`;
-  h += `<div class="sub">Low jitter relative to the average suggests automated (triggerbot) timing; a human ` +
-       `combo shows wider spread.</div>`;
   h += thinNote(d.comboList.length, d.comboTotal, 'intervals');
-  h += seriesChart('Combo inter-hit interval over time (ms)', d.comboList, d, {
+  h += chartBlock(seriesChart('Combo inter-hit interval over time (ms)', d.comboList, d, {
     value: p => p.interval, color: () => COMBO, lineColor: COMBO, unit: 'ms',
     tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${p.interval} ms`,
-  });
+  }));
 
   h += `<h2>Reach</h2><div class="cards">` +
        card(d.swings, 'swings') + card(d.swingHits, 'landed') + card(d.swings - d.swingHits, 'whiffed') +
        card(f2(d.reachAvg) + ' b', 'avg reach') + card(f2(d.reachMax) + ' b', 'max reach') +
        card(f2(d.reachSd) + ' b', 'std dev') + `</div>`;
-  h += `<div class="sub">Distance from the player's eyes to the <b>nearest point</b> of the target's hitbox ` +
-       `&mdash; the same quantity vanilla checks in <code>isWithinEntityInteractionRange</code>. Green landed, ` +
-       `red whiffed. The dashed line is vanilla melee range (3.0 blocks); landed hits should sit at or below it, ` +
-       `while whiffs can exceed it because they were thrown from too far away.</div>`;
+  h += `<div class="sub">Green landed, red whiffed. Dashed line is vanilla melee range.</div>`;
   h += thinNote(d.swingList.length, d.swingTotal, 'swings');
-  h += seriesChart('Reach per swing (blocks)', d.swingList, d, {
+  h += chartBlock(seriesChart('Reach per swing (blocks)', d.swingList, d, {
     value: p => p.reach, color: p => p.hit ? HIT : MISS, line: false, unit: 'blocks',
     baseMax: VANILLA_REACH, refLine: VANILLA_REACH, refLabel: 'vanilla 3.0',
     tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${f2(p.reach)} blocks ${p.hit ? '(landed)' : '(whiffed)'}` +
                     (p.target >= 0 && dd.opponents[p.target] ? ' vs ' + dd.opponents[p.target] : ''),
-  });
+  }));
 
   h += `<h2>Aim placement</h2><div class="cards">` +
        card(f2(d.aimAvg) + '&deg;', 'avg off-centre') + card(f2(d.aimSd) + '&deg;', 'std dev') + `</div>`;
-  h += `<div class="sub">Where the crosshair sat relative to the middle of the target's hitbox, drawn to scale ` +
-       `(0.6 &times; 1.8 blocks). Human aim scatters across the box; a tight cluster on dead centre is what an ` +
-       `aim assist looks like.</div>`;
-  h += aimScatter(d);
+  h += `<div class="sub">Hitbox drawn to scale. Green landed, red whiffed.</div>`;
+  h += chartBlock(aimScatter(d));
 
-  h += `<h2>What this is</h2><div class="note">Generated by ` +
+  h += `<h2>About</h2><div class="note">Generated by ` +
        `<a href="https://github.com/reeeeman1/Combat-Tracker" style="color:#29b6f6">Combat Tracker</a>, a ` +
-       `client-side Minecraft mod that only observes &mdash; it never changes movement, reach or aim.` +
-       `<br><br><span class="warn">Read this honestly:</span> the whole session travels inside this link, so ` +
-       `nothing was uploaded and nothing verified it. Reach and aim are measured on the player's own client, ` +
-       `where other players are interpolated locally and latency shifts what the server saw. Anyone who ` +
-       `recompiles the open-source mod can fabricate a link. Treat it as a readable record of a fight, not as ` +
-       `proof.</div>`;
+       `client-side Minecraft mod that only observes. It never changes movement, reach or aim.` +
+       `<br><br><span class="warn">Read honestly:</span> the session travels inside this link, so nothing was ` +
+       `uploaded and nothing verified it. Reach and aim are measured on the player's own client. Anyone who ` +
+       `recompiles the open-source mod can fabricate a link. Treat it as a record of a fight, not proof.</div>`;
 
   document.getElementById('app').innerHTML = h;
   attachPanZoom();
 }
 
+// Pan, zoom, and click-to-read. Kept in step with ReportBuilder.chartScript() in
+// the mod. The offline report and this page behave identically on purpose.
+//
+// A click selects the NEAREST point rather than demanding a direct hit: the dots
+// are three pixels across and hitting one exactly is not realistic on a dense
+// chart. The search radius scales with zoom so it stays constant on screen, and
+// drags are excluded by distance travelled so panning doesn't select anything.
 function attachPanZoom() {
   document.querySelectorAll('svg.chart').forEach(function (svg) {
     const vb = svg.getAttribute('viewBox').split(' ').map(Number);
     const init = vb.slice();
     let v = { x: vb[0], y: vb[1], w: vb[2], h: vb[3] };
     const ap = () => svg.setAttribute('viewBox', v.x + ' ' + v.y + ' ' + v.w + ' ' + v.h);
+
+    const out = svg.parentNode.querySelector('.readout');
+    let sel = null;
+    function clearSel() {
+      if (sel) { sel.removeAttribute('data-sel'); sel = null; }
+      if (out) { out.textContent = out.getAttribute('data-hint'); out.classList.remove('on'); }
+    }
+    function pick(c) {
+      if (sel) sel.removeAttribute('data-sel');
+      sel = c; c.setAttribute('data-sel', '1');
+      if (out) {
+        const t = c.querySelector('title');
+        out.textContent = t ? t.textContent : '';
+        out.classList.add('on');
+      }
+    }
+
     svg.addEventListener('wheel', function (e) {
       e.preventDefault();
       const r = svg.getBoundingClientRect();
@@ -411,17 +386,39 @@ function attachPanZoom() {
       v.y = my - (e.clientY - r.top) / r.height * v.h;
       ap();
     }, { passive: false });
-    let dragging = false, lx = 0, ly = 0;
-    svg.addEventListener('mousedown', e => { dragging = true; lx = e.clientX; ly = e.clientY; svg.style.cursor = 'grabbing'; });
+
+    let dragging = false, lx = 0, ly = 0, moved = 0;
+    svg.addEventListener('mousedown', e => {
+      dragging = true; lx = e.clientX; ly = e.clientY; moved = 0; svg.style.cursor = 'grabbing';
+    });
     window.addEventListener('mousemove', function (e) {
       if (!dragging) return;
+      moved += Math.abs(e.clientX - lx) + Math.abs(e.clientY - ly);
       const r = svg.getBoundingClientRect();
       v.x -= (e.clientX - lx) / r.width * v.w;
       v.y -= (e.clientY - ly) / r.height * v.h;
       lx = e.clientX; ly = e.clientY; ap();
     });
     window.addEventListener('mouseup', () => { dragging = false; svg.style.cursor = 'grab'; });
-    svg.addEventListener('dblclick', () => { v = { x: init[0], y: init[1], w: init[2], h: init[3] }; ap(); });
+
+    svg.addEventListener('click', function (e) {
+      if (moved > 4) return;   // that was a pan, not a click
+      const r = svg.getBoundingClientRect();
+      const ux = v.x + (e.clientX - r.left) / r.width * v.w;
+      const uy = v.y + (e.clientY - r.top) / r.height * v.h;
+      let best = null, bd = Infinity;
+      svg.querySelectorAll('circle').forEach(function (c) {
+        const dx = +c.getAttribute('cx') - ux, dy = +c.getAttribute('cy') - uy;
+        const dd = dx * dx + dy * dy;
+        if (dd < bd) { bd = dd; best = c; }
+      });
+      const lim = 14 * (v.w / init[2]);
+      if (best && bd <= lim * lim) pick(best); else clearSel();
+    });
+
+    svg.addEventListener('dblclick', () => {
+      v = { x: init[0], y: init[1], w: init[2], h: init[3] }; ap(); clearSel();
+    });
   });
 }
 
@@ -434,7 +431,7 @@ async function boot() {
   const frag = location.hash.replace(/^#/, '').trim();
   if (!frag) {
     showMessage('Combat Tracker', 'This page renders a Combat Tracker session that is carried entirely inside ' +
-      'the link &mdash; there is no server and nothing is stored here. Open a session link to view it, or grab ' +
+      'the link  there is no server and nothing is stored here. Open a session link to view it, or grab ' +
       'the mod from <a href="https://github.com/reeeeman1/Combat-Tracker" style="color:#29b6f6">GitHub</a> and ' +
       'record your own with <code>Stop Recording</code>.');
     return;
@@ -447,7 +444,7 @@ async function boot() {
   try {
     render(decode(await inflateRaw(b64urlToBytes(frag))));
   } catch (err) {
-    showMessage('Could not read this link', 'The session data appears truncated or corrupted &mdash; chat clients ' +
+    showMessage('Could not read this link', 'The session data appears truncated or corrupted  chat clients ' +
       'sometimes cut long links in half. Ask for it again as a full copy-paste.<br><br><code>' +
       esc(err && err.message ? err.message : String(err)) + '</code>');
   }

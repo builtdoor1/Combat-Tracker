@@ -37,6 +37,14 @@ public class JumpResetTracker {
     private static final int RESULT_COOLDOWN_TICKS = 4;
 
     /**
+     * Attempts further than this from the hit, in either direction, are discarded
+     * rather than scored. A jump a fifth of a second either side of taking damage
+     * is just a jump that happened nearby, not an attempt at a reset, and counting
+     * it drags the statistics around and flattens the chart's axis.
+     */
+    private static final long MAX_ATTEMPT_MS = 200;
+
+    /**
      * Minimum horizontal speed just after damage for it to count as a real combat
      * hit. Fall, fire and poison impart no horizontal knockback and land far below
      * this; a melee hit lands far above it, so the gap is wide and there is no
@@ -178,8 +186,11 @@ public class JumpResetTracker {
     }
 
     private void registerAttempt(double ms) {
-        lastResultTick = currentTick;
         long delta = Math.round(ms);
+        if (Math.abs(delta) > MAX_ATTEMPT_MS) {
+            return; // not a reset attempt, just a jump that happened near a hit
+        }
+        lastResultTick = currentTick;
 
         TimingWindow window = CtConfig.get().window;
         TimingWindow.Result result = window.classify(delta);

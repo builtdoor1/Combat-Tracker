@@ -102,9 +102,13 @@ public final class ReportPreview {
             long t = start + i * 900L + rng.nextInt(120);
 
             // Jump resets: centred a little inside the success window, human spread.
+            // Anything past 200ms is discarded by the tracker as "not an attempt",
+            // so the preview drops it too and stays representative.
             long delta = Math.round(45 + rng.nextGaussian() * jumpSpreadMs);
-            String result = delta < 0 ? "TOO_EARLY" : (delta > 80 ? "TOO_LATE" : "SUCCESS");
-            d.jumpEvents.add(new SessionData.JEvent(t, delta, result));
+            if (Math.abs(delta) <= 200) {
+                String result = delta < 0 ? "TOO_EARLY" : (delta > 80 ? "TOO_LATE" : "SUCCESS");
+                d.jumpEvents.add(new SessionData.JEvent(t, delta, result));
+            }
 
             // Combo intervals around the sword cooldown, with real jitter.
             if (i % 2 == 0) {

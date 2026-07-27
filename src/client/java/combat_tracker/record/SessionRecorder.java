@@ -60,6 +60,12 @@ public class SessionRecorder {
     /** Link for the most recently saved session, or null if there isn't one yet. */
     private String lastShareLink = null;
 
+    // Ping is averaged across the whole recording rather than read at the moment
+    // you stop. A snapshot at stop time reports whatever spike happened to be in
+    // flight, which is how a session played at ~25ms came out as 90.
+    private long pingSumMs = 0;
+    private int pingSamples = 0;
+
     public boolean isRecording() {
         return recording;
     }
@@ -91,6 +97,8 @@ public class SessionRecorder {
         combos.clear();
         swings.clear();
         opponents.clear();
+        pingSumMs = 0;
+        pingSamples = 0;
         chat("Recording started", ChatFormatting.GREEN);
     }
 
@@ -126,6 +134,14 @@ public class SessionRecorder {
     public void recordCombo(long intervalMs, boolean newCombo) {
         if (recording) {
             combos.add(new SessionData.CEvent(System.currentTimeMillis(), intervalMs, newCombo));
+        }
+    }
+
+    /** Called once per client tick while recording, to average ping over the session. */
+    public void samplePing(int roundTripMs) {
+        if (recording && roundTripMs > 0) {
+            pingSumMs += roundTripMs;
+            pingSamples++;
         }
     }
 
@@ -196,9 +212,9 @@ public class SessionRecorder {
         d.comboEvents = new ArrayList<>(combos);
         d.swingEvents = new ArrayList<>(swings);
         d.opponents = new ArrayList<>(opponents);
-        // Context only — latency adjusts no measurement, but a reader deserves to
-        // know whether a session was played on 30ms or 250ms.
-        d.pingMs = combat_tracker.detection.LatencyEstimator.get().roundTripMs();
+        // Mean across the whole recording, not a reading taken at the moment you
+        // stopped. Context only; it adjusts no measurement.
+        d.pingMs = pingSamples == 0 ? 0 : (double) pingSumMs / pingSamples;
         SessionStats.summarise(d);
         return d;
     }

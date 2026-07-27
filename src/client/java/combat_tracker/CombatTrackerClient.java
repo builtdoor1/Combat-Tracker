@@ -3,6 +3,7 @@ package combat_tracker;
 import combat_tracker.config.CtConfig;
 import combat_tracker.detection.ComboTracker;
 import combat_tracker.detection.JumpResetTracker;
+import combat_tracker.detection.LatencyEstimator;
 import combat_tracker.record.SessionRecorder;
 import combat_tracker.stats.ComboStatsTracker;
 import combat_tracker.stats.StatsTracker;
@@ -87,6 +88,8 @@ public class CombatTrackerClient implements ClientModInitializer {
         if (player != null && client.level != null) {
             tracker.tick(client);
             ComboTracker.get().tick(player);
+            // Ping is averaged across the recording rather than sampled at the end.
+            SessionRecorder.get().samplePing(LatencyEstimator.get().currentMs());
         }
     }
 }
