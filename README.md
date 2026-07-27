@@ -220,6 +220,12 @@ Measured against the tick position, not the interpolated render frame, for the s
 - The ~0.7s gap is roughly the sword's full attack-cooldown recharge (~0.625s) plus grace. If your sword is charged and you don't swing, the combo is over. It's a hardcoded constant so a stale config can't shift it.
 - The mod reports the average interval and the jitter (standard deviation). Low jitter suggests a triggerbot, high jitter suggests a human.
 
+**Intervals are timed from your mouse press, not from the tick the attack was processed on.** This matters more than it sounds. Attacks are handled inside the client tick loop, so timing them there quantises every interval to a 50ms boundary: you get 550, 600, 650 and nothing in between, and the natural variation between a person's clicks (the entire signal against an autoclicker) is rounded away before it can be measured.
+
+Mouse buttons arrive through `MouseHandler.onButton`, which the GLFW callback hands to `Minecraft.execute`. That queue drains once per **frame**, so a timestamp taken there is accurate to a frame instead of a tick: roughly 5ms at 200fps versus 50ms. Presses are queued and paired first-in-first-out with attacks, matching vanilla's own `while (keyAttack.consumeClick())` loop, and only presses made with the mouse grabbed are recorded so clicks in a menu can't shift the pairing.
+
+An autoclicker driving the real mouse is captured exactly like a human hand, which is the point: its steadiness becomes visible. Something injecting attacks inside the game leaves no click at all and falls back to tick timing.
+
 </details>
 
 <details>

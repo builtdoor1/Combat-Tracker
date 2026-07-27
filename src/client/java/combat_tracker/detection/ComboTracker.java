@@ -1,5 +1,6 @@
 package combat_tracker.detection;
 
+import combat_tracker.CombatTrackerClient;
 import combat_tracker.record.SessionRecorder;
 import combat_tracker.stats.ComboStatsTracker;
 import net.minecraft.client.Minecraft;
@@ -45,7 +46,13 @@ public class ComboTracker {
             return; // sprint hits only
         }
 
-        long nano = System.nanoTime();
+        // Time from the mouse press, not from the tick this attack was processed
+        // on. Attack processing is tick-bound, so tick timing rounds every interval
+        // to a 50ms boundary and the variation between a human's clicks, which is
+        // the whole signal against an autoclicker, disappears before it is measured.
+        // 0 means no click was behind this attack, so fall back to the tick.
+        long clickNano = CombatTrackerClient.clickNano;
+        long nano = clickNano != 0L ? clickNano : System.nanoTime();
         long maxGapNano = COMBO_GAP_NANO;
 
         if (target.getId() == currentTargetId && comboHits >= 1 && (nano - lastHitNano) <= maxGapNano) {

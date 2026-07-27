@@ -1,6 +1,7 @@
 package combat_tracker;
 
 import combat_tracker.config.CtConfig;
+import combat_tracker.detection.ClickTimestamps;
 import combat_tracker.detection.ComboTracker;
 import combat_tracker.detection.JumpResetTracker;
 import combat_tracker.detection.LatencyEstimator;
@@ -39,6 +40,16 @@ public class CombatTrackerClient implements ClientModInitializer {
      * instead of one quantized to the end of the tick. 0 means "none yet".
      */
     public static volatile long hitNano = 0L;
+
+    /**
+     * Time of the mouse press behind the attack currently being processed, set by
+     * {@code MinecraftMixin} at the top of {@code startAttack}. 0 means the attack
+     * had no click behind it, in which case timing falls back to the tick.
+     *
+     * <p>Combo intervals are measured from this rather than from the tick the
+     * attack was processed on. See {@link combat_tracker.detection.ClickTimestamps}.</p>
+     */
+    public static volatile long clickNano = 0L;
 
     /** Returns the pending jump nano-timestamp (or 0) and clears it. */
     public static long consumeJumpNano() {
@@ -85,6 +96,11 @@ public class CombatTrackerClient implements ClientModInitializer {
         }
 
         LocalPlayer player = client.player;
+        if (player == null) {
+            // Disconnected or in a menu with no world: drop any click that never
+            // became an attack, so it can't pair with a swing after reconnecting.
+            ClickTimestamps.clear();
+        }
         if (player != null && client.level != null) {
             tracker.tick(client);
             ComboTracker.get().tick(player);

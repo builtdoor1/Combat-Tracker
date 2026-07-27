@@ -1,5 +1,7 @@
 package combat_tracker.mixin;
 
+import combat_tracker.CombatTrackerClient;
+import combat_tracker.detection.ClickTimestamps;
 import combat_tracker.detection.SwingTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -28,6 +30,13 @@ public class MinecraftMixin {
     @Inject(method = "startAttack", at = @At("HEAD"))
     private void combatTracker$onStartAttack(CallbackInfoReturnable<Boolean> cir) {
         Minecraft client = (Minecraft) (Object) this;
+
+        // Take the click behind this swing first, before any guard can return.
+        // Vanilla calls startAttack once per queued press, so consuming here
+        // unconditionally keeps the click queue paired with attacks; bailing out
+        // early would leave a press stranded and shift every later interval.
+        CombatTrackerClient.clickNano = ClickTimestamps.consume();
+
         LocalPlayer player = client.player;
         if (player == null || client.hitResult == null) {
             return;

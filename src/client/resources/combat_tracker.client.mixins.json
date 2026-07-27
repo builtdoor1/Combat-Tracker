@@ -6,6 +6,7 @@
 		"LivingEntityMixin",
 		"MultiPlayerGameModeMixin",
 		"MinecraftMixin",
+		"MouseHandlerMixin",
 		"GuiMixin"
 	],
 	"injectors": {
