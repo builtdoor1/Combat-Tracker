@@ -108,6 +108,11 @@ public class SessionRecorder {
         pingSamples = 0;
         playerName = null;
         playerUuid = null;
+        LocalPlayer self = Minecraft.getInstance().player;
+        if (self != null) {
+            playerName = self.getName().getString();
+            playerUuid = self.getUUID().toString();
+        }
         chat("Recording started", ChatFormatting.GREEN);
     }
 

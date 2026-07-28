@@ -31,11 +31,7 @@ public final class ReportBuilder {
         s.append(css());
         s.append("</style></head><body>");
 
-        s.append("<h1>Combat Tracker Session Report</h1>");
-        s.append("<div class=\"sub\">Player <b>").append(esc(d.player)).append("</b> &middot; ")
-                .append(esc(d.mod)).append(" on MC ").append(esc(d.mcVersion)).append("</div>");
-        s.append("<div class=\"sub\">Charts: <b>click a point for its exact value</b> &middot; scroll to zoom "
-                + "&middot; drag to pan &middot; double-click to reset.</div>");
+        identity(s, d);
 
         header(s, d);
         jumpSection(s, d);
@@ -52,6 +48,49 @@ public final class ReportBuilder {
 
     // ── Sections ─────────────────────────────────────────────────────────────
 
+    /**
+     * Skin, name and opponents, matching the online viewer so a saved report and a
+     * shared link look like the same product.
+     *
+     * <p>The heads come from a head-render service, which is the one thing on the
+     * page that needs the network. Opening a report offline simply drops the images
+     * and keeps every number, so nothing important depends on it.</p>
+     */
+    private static void identity(StringBuilder s, SessionData d) {
+        s.append("<h1>Combat Tracker Session Report</h1>");
+        s.append("<div class=\"who\">").append(head(d.playerUuid, 52))
+                .append("<span class=\"ign\">").append(esc(d.player)).append("</span></div>");
+
+        if (!d.opponents.isEmpty()) {
+            s.append("<div class=\"vs\">vs ");
+            for (String o : d.opponents) {
+                s.append(head(o, 24)).append(" ").append(esc(o)).append(" &nbsp; ");
+            }
+            s.append("</div>");
+        }
+
+        long durS = Math.max(0, (d.endEpochMs - d.startEpochMs) / 1000);
+        s.append("<div class=\"sub\">").append(esc(d.startUtc)).append(" &middot; ")
+                .append(durS / 60).append("m ").append(durS % 60).append("s &middot; ")
+                .append(Math.round(d.pingMs)).append(" ms ping &middot; charts: ")
+                .append("<b>click a point for its exact value</b>, scroll to zoom, drag to pan, ")
+                .append("double-click to reset.</div>");
+    }
+
+    /**
+     * A player head by UUID or name. Anything outside the character set a Minecraft
+     * name or UUID can contain is stripped, so nothing from a session can break out
+     * of the URL or the attribute.
+     */
+    private static String head(String idOrName, int size) {
+        String safe = idOrName == null ? "" : idOrName.replaceAll("[^A-Za-z0-9_-]", "");
+        if (safe.isEmpty()) {
+            return "";
+        }
+        return "<img src=\"https://mc-heads.net/avatar/" + safe + "/" + size + "\" alt=\"\" "
+                + "onerror=\"this.style.display='none'\">";
+    }
+
     private static void header(StringBuilder s, SessionData d) {
         s.append("<table><tr><th>Start (time signature)</th><td>").append(esc(d.startUtc))
                 .append(" <span class=\"sub\">(epoch ").append(d.startEpochMs).append(")</span></td></tr>");
@@ -62,9 +101,6 @@ public final class ReportBuilder {
         s.append("<tr><th>Player UUID</th><td>").append(esc(d.playerUuid)).append("</td></tr>");
         s.append("<tr><th>Ping (session average)</th><td>").append(Math.round(d.pingMs))
                 .append(" ms <span class=\"sub\">(recorded for context; it adjusts no measurement)</span></td></tr>");
-        if (!d.opponents.isEmpty()) {
-            s.append("<tr><th>Opponents</th><td>").append(esc(String.join(", ", d.opponents))).append("</td></tr>");
-        }
         s.append("</table>");
     }
 
@@ -485,10 +521,18 @@ public final class ReportBuilder {
                 + "*{box-sizing:border-box;}"
                 + "body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text);"
                 + "margin:0;padding:clamp(16px,2.5vw,32px);-webkit-font-smoothing:antialiased;}"
-                + "h1{font-size:clamp(19px,1.4vw+14px,26px);margin:0 0 4px;letter-spacing:-.01em;}"
-                + "h2{font-size:clamp(14px,.5vw+12px,17px);margin:28px 0 8px;color:var(--accent);"
+                + "h1{font-size:clamp(19px,1.4vw + 14px,26px);margin:0 0 4px;letter-spacing:-.01em;}"
+                + "h2{font-size:clamp(14px,.5vw + 12px,17px);margin:28px 0 8px;color:var(--accent);"
                 + "letter-spacing:.01em;}"
                 + ".sub{color:var(--muted);font-size:13px;margin-bottom:12px;line-height:1.55;}"
+                + ".who{display:flex;align-items:center;gap:14px;margin:14px 0 4px;flex-wrap:wrap;}"
+                + ".who img{width:52px;height:52px;image-rendering:pixelated;border-radius:8px;"
+                + "background:var(--panel);box-shadow:var(--e1);transition:transform var(--med) var(--ease);}"
+                + ".who img:hover{transform:scale(1.06);}"
+                + ".who .ign{font-size:clamp(20px,1vw + 16px,25px);font-weight:600;letter-spacing:-.01em;}"
+                + ".vs{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;flex-wrap:wrap;}"
+                + ".vs img{width:24px;height:24px;image-rendering:pixelated;border-radius:5px;"
+                + "background:var(--panel);}"
                 + "table{border-collapse:collapse;font-size:13px;margin:4px 0;}"
                 + "td,th{border:1px solid var(--line);padding:5px 11px;text-align:left;}"
                 + "th{background:var(--panel);color:var(--accent);font-weight:600;}"
@@ -499,7 +543,7 @@ public final class ReportBuilder {
                 + "transition:transform var(--med) var(--ease),border-color var(--med) var(--ease),"
                 + "box-shadow var(--med) var(--ease);}"
                 + ".card:hover{transform:translateY(-2px);border-color:var(--line-hi);box-shadow:var(--e2);}"
-                + ".card .v{font-size:clamp(19px,1vw+15px,23px);font-weight:600;letter-spacing:-.01em;}"
+                + ".card .v{font-size:clamp(19px,1vw + 15px,23px);font-weight:600;letter-spacing:-.01em;}"
                 + ".card .k{font-size:12px;color:var(--muted);margin-top:1px;}"
                 + ".intg{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:13px;"
                 + "font-family:ui-monospace,Consolas,monospace;font-size:12px;word-break:break-all;line-height:1.6;}"
