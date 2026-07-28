@@ -9,6 +9,8 @@ import combat_tracker.screen.ButtonEntry;
 import combat_tracker.screen.HudPositionScreen;
 import combat_tracker.stats.ComboStatsTracker;
 import combat_tracker.stats.StatsTracker;
+import combat_tracker.record.SavedRecordings;
+import me.shedaniel.clothconfig2.api.AbstractConfigListEntry;
 import me.shedaniel.clothconfig2.api.ConfigBuilder;
 import me.shedaniel.clothconfig2.api.ConfigCategory;
 import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
@@ -19,6 +21,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.util.Util;
 
 import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Builds the settings screen with Cloth Config and hands it to Mod Menu's "config"
@@ -172,9 +176,51 @@ public class ModMenuIntegration implements ModMenuApi {
                         + "link itself and is never uploaded anywhere."),
                 b -> copyShareLink(b)));
 
+        savedRecordings(eb, recording);
+
         recording.addEntry(new ButtonEntry(Component.literal("Reset stats"),
                 Component.literal("Clears both jump-reset and combo statistics. Click twice to confirm."),
                 new ResetHandler()));
+    }
+
+    /**
+     * Every saved session, each with its link a click away.
+     *
+     * <p>Links are rebuilt from the {@code .json} on disk rather than stored, so
+     * this covers recordings made long before the list existed. Without it, only
+     * the session from the current game run was ever shareable: the recorder keeps
+     * one link in memory and restarting the game lost it.</p>
+     */
+    private static void savedRecordings(ConfigEntryBuilder eb, ConfigCategory recording) {
+        List<SavedRecordings.Entry> saved = SavedRecordings.list();
+        if (saved.isEmpty()) {
+            recording.addEntry(eb.startTextDescription(Component.literal(
+                            "No saved recordings yet. Stop a recording and it will appear here."))
+                    .build());
+            return;
+        }
+
+        List<AbstractConfigListEntry> rows = new ArrayList<>();
+        for (SavedRecordings.Entry e : saved) {
+            rows.add(new ButtonEntry(Component.literal(e.label()),
+                    Component.literal("Click to copy this session's share link."),
+                    b -> copySavedLink(b, e)));
+        }
+        recording.addEntry(eb.startSubCategory(
+                        Component.literal("Saved recordings (" + saved.size() + ")"), rows)
+                .setTooltip(Component.literal("Every session on disk. Click one to copy its share link."))
+                .build());
+    }
+
+    /** Rebuilds a saved session's link and puts it on the clipboard. */
+    private static void copySavedLink(Button button, SavedRecordings.Entry e) {
+        String link = SavedRecordings.linkFor(e.data(), CtConfig.get().shareBaseUrl);
+        if (link == null) {
+            button.setMessage(Component.literal("No viewer URL configured").withStyle(ChatFormatting.RED));
+            return;
+        }
+        Minecraft.getInstance().keyboardHandler.setClipboard(link);
+        button.setMessage(Component.literal("Link copied").withStyle(ChatFormatting.GREEN));
     }
 
     private static Component recordLabel() {

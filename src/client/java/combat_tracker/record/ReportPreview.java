@@ -67,6 +67,13 @@ public final class ReportPreview {
 
         clickTimestampSelfTest();
 
+        // Optional third argument: a real recordings folder. Rebuilding links from
+        // saved sessions is the whole point of the recordings list, and that path
+        // only ever touches files, so it is worth proving against real data.
+        if (args.length > 2) {
+            verifySavedRecordings(Path.of(args[2]));
+        }
+
         // Size behaviour across session lengths, to confirm downsampling engages
         // and does not throw away more of the graph than the budget requires.
         String base = "https://builtdoor1.github.io/Combat-Tracker/";
@@ -109,6 +116,22 @@ public final class ReportPreview {
         check(ClickTimestamps.claim() == 0L, "clear drops a pending press");
 
         System.out.println("click pairing: 5 checks passed");
+    }
+
+    private static void verifySavedRecordings(Path dir) {
+        var saved = SavedRecordings.list(dir);
+        System.out.println("saved recordings in " + dir + ": " + saved.size());
+        int ok = 0;
+        for (var e : saved) {
+            String link = SavedRecordings.linkFor(e.data(), "https://builtdoor1.github.io/Combat-Tracker/");
+            boolean good = link != null && link.length() <= 2000 && e.data().player != null;
+            if (good) {
+                ok++;
+            }
+            System.out.printf("  %-52s link %4d chars %s%n",
+                    e.label(), link == null ? 0 : link.length(), good ? "" : "  <-- PROBLEM");
+        }
+        System.out.println("  rebuilt " + ok + "/" + saved.size() + " links");
     }
 
     private static void check(boolean ok, String what) {

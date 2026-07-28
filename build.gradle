@@ -79,7 +79,8 @@ tasks.register('reportPreview', JavaExec) {
 	classpath = sourceSets.client.runtimeClasspath
 	mainClass = 'combat_tracker.record.ReportPreview'
 	args = [project.findProperty('previewOut') ?: 'build/preview',
-			project.findProperty('previewEvents') ?: '120']
+			project.findProperty('previewEvents') ?: '120',
+			project.findProperty('previewRecordings') ?: '']
 }
 
 java {
