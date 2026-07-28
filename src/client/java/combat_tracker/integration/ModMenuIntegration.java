@@ -203,7 +203,7 @@ public class ModMenuIntegration implements ModMenuApi {
         List<AbstractConfigListEntry> rows = new ArrayList<>();
         for (SavedRecordings.Entry e : saved) {
             rows.add(new ButtonEntry(Component.literal(e.label()),
-                    Component.literal("Click to copy this session's share link."),
+                    Component.literal(e.tooltip() + "\n\nClick to copy this session's share link."),
                     b -> copySavedLink(b, e)));
         }
         recording.addEntry(eb.startSubCategory(

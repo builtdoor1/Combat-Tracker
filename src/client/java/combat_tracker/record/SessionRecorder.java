@@ -183,6 +183,11 @@ public class SessionRecorder {
                 opponentIndex(targetName)));
     }
 
+    /** Removes Minecraft colour and style codes, and any leftover whitespace. */
+    static String stripFormatting(String in) {
+        return in == null ? null : in.replaceAll("§.", "").trim();
+    }
+
     private static String firstNonNull(String a, String b, String fallback) {
         if (a != null) {
             return a;
@@ -190,9 +195,16 @@ public class SessionRecorder {
         return b != null ? b : fallback;
     }
 
-    /** Opponents are stored once and referenced by index, keeping the link small. */
-    private int opponentIndex(String name) {
-        if (name == null) {
+    /**
+     * Opponents are stored once and referenced by index, keeping the link small.
+     *
+     * <p>Names are stripped of formatting codes first. Practice servers use entities
+     * whose display name carries colour codes, and storing those raw put a literal
+     * paragraph sign into the report, the share link and the skin lookup URL.</p>
+     */
+    private int opponentIndex(String rawName) {
+        String name = stripFormatting(rawName);
+        if (name == null || name.isEmpty()) {
             return -1;
         }
         int i = opponents.indexOf(name);

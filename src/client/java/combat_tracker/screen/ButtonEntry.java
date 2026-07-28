@@ -21,7 +21,9 @@ import java.util.function.Supplier;
  * is how the recording and reset-confirmation entries flip their text.</p>
  */
 public class ButtonEntry extends TooltipListEntry<Object> {
-    private static final int MAX_WIDTH = 200;
+    // Wide enough for a recordings row carrying a date and two player names.
+    // It is a min() against the available width, so narrow screens are unaffected.
+    private static final int MAX_WIDTH = 260;
     private static final int HEIGHT = 20;
 
     private final Button button;

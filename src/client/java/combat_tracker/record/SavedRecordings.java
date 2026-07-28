@@ -39,14 +39,51 @@ public final class SavedRecordings {
     /** One saved session, newest first. */
     public record Entry(Path json, Path html, SessionData data) {
 
-        /** Short label for a list row: when, who, and how much is in it. */
+        /** How many opponent names to spell out before summarising the rest. */
+        private static final int NAMES_SHOWN = 2;
+
+        /**
+         * Short label for a list row: when it was, and who it was against.
+         *
+         * <p>Who you fought is what actually distinguishes one session from another
+         * when you are looking for a particular one. Event counts said nothing
+         * useful at a glance, so they moved to the tooltip.</p>
+         */
         public String label() {
-            String when = data.startUtc == null ? "?" : data.startUtc.replace(" UTC", "");
-            if (when.length() > 16) {
-                when = when.substring(0, 16); // drop seconds
+            return when() + "  " + opponents();
+        }
+
+        /** Everything about the session, shown on hover where there is room. */
+        public String tooltip() {
+            StringBuilder s = new StringBuilder();
+            s.append(data.startUtc == null ? "?" : data.startUtc);
+            s.append("\nRecorded by ").append(data.player == null ? "?" : data.player);
+            if (!data.opponents.isEmpty()) {
+                s.append("\nAgainst ").append(String.join(", ", data.opponents));
             }
-            return when + "  " + (data.player == null ? "?" : data.player)
-                    + "  " + data.swings + " swings, " + data.jumpAttempts + " jumps";
+            s.append("\n").append(data.swings).append(" swings, ")
+                    .append(data.jumpAttempts).append(" jump resets, ")
+                    .append(data.comboIntervals).append(" combo hits");
+            return s.toString();
+        }
+
+        private String when() {
+            String w = data.startUtc == null ? "?" : data.startUtc.replace(" UTC", "");
+            // Trim the year and seconds: the day and time are what you scan for.
+            return w.length() >= 16 ? w.substring(5, 16) : w;
+        }
+
+        private String opponents() {
+            List<String> names = data.opponents;
+            if (names == null || names.isEmpty()) {
+                return "no opponents";
+            }
+            List<String> clean = names.stream().map(SessionRecorder::stripFormatting).toList();
+            if (clean.size() <= NAMES_SHOWN) {
+                return "vs " + String.join(", ", clean);
+            }
+            return "vs " + String.join(", ", clean.subList(0, NAMES_SHOWN))
+                    + " +" + (clean.size() - NAMES_SHOWN);
         }
     }
 
