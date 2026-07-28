@@ -104,8 +104,10 @@ public class CombatTrackerClient implements ClientModInitializer {
         if (player != null && client.level != null) {
             tracker.tick(client);
             ComboTracker.get().tick(player);
-            // Ping is averaged across the recording rather than sampled at the end.
+            // Ping and identity are both captured while playing rather than at the
+            // moment the report is written, when the player may already be gone.
             SessionRecorder.get().samplePing(LatencyEstimator.get().currentMs());
+            SessionRecorder.get().noteIdentity(player.getName().getString(), player.getUUID().toString());
         }
     }
 }

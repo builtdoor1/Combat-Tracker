@@ -66,6 +66,13 @@ public class SessionRecorder {
     private long pingSumMs = 0;
     private int pingSamples = 0;
 
+    // Who recorded this, captured while playing rather than when saving. Reading
+    // it at stop time meant that stopping after leaving a server produced a report
+    // with no name on it at all: the player is gone by then, even though every
+    // event recorded correctly.
+    private String playerName = null;
+    private String playerUuid = null;
+
     public boolean isRecording() {
         return recording;
     }
@@ -99,6 +106,8 @@ public class SessionRecorder {
         opponents.clear();
         pingSumMs = 0;
         pingSamples = 0;
+        playerName = null;
+        playerUuid = null;
         chat("Recording started", ChatFormatting.GREEN);
     }
 
@@ -145,6 +154,21 @@ public class SessionRecorder {
         }
     }
 
+    /**
+     * Remembers who is playing, called every tick while recording.
+     *
+     * <p>Taken here rather than when the report is written. Stopping a recording
+     * after leaving a server is entirely normal, and by then there is no player to
+     * ask, which produced reports headed "unknown" with no skin despite every event
+     * having recorded correctly.</p>
+     */
+    public void noteIdentity(String name, String uuid) {
+        if (recording && name != null && uuid != null) {
+            playerName = name;
+            playerUuid = uuid;
+        }
+    }
+
     /** One attack swing with its measured geometry. See {@code SwingTracker}. */
     public void recordSwing(double reach, boolean hit, double aimDeg, double offX, double offY, String targetName) {
         if (!recording) {
@@ -152,6 +176,13 @@ public class SessionRecorder {
         }
         swings.add(new SessionData.SEvent(System.currentTimeMillis(), reach, hit, aimDeg, offX, offY,
                 opponentIndex(targetName)));
+    }
+
+    private static String firstNonNull(String a, String b, String fallback) {
+        if (a != null) {
+            return a;
+        }
+        return b != null ? b : fallback;
     }
 
     /** Opponents are stored once and referenced by index, keeping the link small. */
@@ -202,8 +233,8 @@ public class SessionRecorder {
         SessionData d = new SessionData();
         d.mod = "Combat Tracker";
         d.mcVersion = "1.21.11";
-        d.player = p != null ? p.getName().getString() : "unknown";
-        d.playerUuid = p != null ? p.getUUID().toString() : "unknown";
+        d.player = firstNonNull(playerName, p != null ? p.getName().getString() : null, "unknown");
+        d.playerUuid = firstNonNull(playerUuid, p != null ? p.getUUID().toString() : null, "unknown");
         d.startEpochMs = startEpochMs;
         d.endEpochMs = endEpochMs;
         d.startUtc = HUMAN.format(Instant.ofEpochMilli(startEpochMs));
