@@ -21,6 +21,12 @@ public final class SessionData {
     public String mcVersion;
     public String player;
     public String playerUuid;
+    /**
+     * Optional label for the session, e.g. who it was against and the score.
+     * Null on anything recorded before titles existed, which the report and the
+     * viewer both treat as "no title" rather than an empty heading.
+     */
+    public String title;
     public long startEpochMs;
     public long endEpochMs;
     public String startUtc;

@@ -37,7 +37,7 @@ public final class SharePayload {
      * readable — the viewer branches on this byte, which is the whole reason it is
      * written first.</p>
      */
-    private static final int FORMAT_VERSION = 2;
+    private static final int FORMAT_VERSION = 3;
 
     /** Leaves room for surrounding text in a 2000-character Discord message. */
     public static final int DEFAULT_MAX_CHARS = 1800;
@@ -115,6 +115,9 @@ public final class SharePayload {
 
         b.str(d.player);
         b.str(d.playerUuid);
+        // v3: a label for the session. Written after the identity so a v1/v2
+        // reader's field order is untouched up to the point it stops caring.
+        b.str(d.title == null ? "" : d.title);
         b.varLong(d.startEpochMs);
         b.varLong(Math.max(0, d.endEpochMs - d.startEpochMs));
 

@@ -118,3 +118,13 @@ publishing {
 		// retrieving dependencies.
 	}
 }
+
+// Rebuilds share links from saved HTML reports, titled by file name.
+tasks.register('linkifyReports', JavaExec) {
+	group = 'verification'
+	description = 'Turn a folder of saved HTML reports into titled share links'
+	classpath = sourceSets.client.runtimeClasspath
+	mainClass = 'combat_tracker.record.LinkifyReports'
+	args = [project.findProperty('linkifyDir') ?: '',
+			project.findProperty('linkifyBase') ?: '']
+}

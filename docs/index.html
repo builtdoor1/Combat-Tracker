@@ -110,13 +110,15 @@ async function inflateRaw(bytes) {
 function decode(raw) {
   const r = new Reader(raw);
   const version = r.u8();
-  if (version < 1 || version > 2) {
+  if (version < 1 || version > 3) {
     throw new Error('This link uses format version ' + version + ', which this page cannot read yet.');
   }
 
   const d = { version };
   d.player = r.str();
   d.playerUuid = r.str();
+  // v3 carries a label for the session; older links simply have none.
+  d.title = version >= 3 ? (r.str() || null) : null;
   d.startEpochMs = r.varLong();
   d.durationMs = r.varLong();
   d.endEpochMs = d.startEpochMs + d.durationMs;
@@ -318,7 +320,8 @@ function render(d) {
   const dur = Math.max(0, Math.floor(d.durationMs / 1000));
   const started = new Date(d.startEpochMs).toISOString().replace('T', ' ').replace(/\..+/, ' UTC');
 
-  let h = `<h1>Combat Tracker Session Report</h1>`;
+  let h = `<h1>${d.title ? esc(d.title) : 'Combat Tracker Session Report'}</h1>`;
+  if (d.title) document.title = d.title + ' - Combat Tracker';
   h += `<div class="who">${head(d.playerUuid || d.player, 48)}<span class="ign">${esc(d.player)}</span></div>`;
   if (d.opponents.length) {
     h += `<div class="vs">vs ${d.opponents.map(o => head(o, 24) + ' ' + esc(o)).join(' &nbsp; ')}</div>`;

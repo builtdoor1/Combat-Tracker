@@ -57,7 +57,8 @@ public final class ReportBuilder {
      * and keeps every number, so nothing important depends on it.</p>
      */
     private static void identity(StringBuilder s, SessionData d) {
-        s.append("<h1>Combat Tracker Session Report</h1>");
+        s.append("<h1>").append(d.title == null || d.title.isEmpty()
+                ? "Combat Tracker Session Report" : esc(d.title)).append("</h1>");
         s.append("<div class=\"who\">").append(head(d.playerUuid, 52))
                 .append("<span class=\"ign\">").append(esc(d.player)).append("</span></div>");
 
