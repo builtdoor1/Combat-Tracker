@@ -4,6 +4,8 @@ Got accused of reach, killaura, autoclicker or auto jump-reset? Hit record, play
 
 It never touches your gameplay. It cannot help you aim, reach further, click faster or reset better. It only watches and writes down what already happened. Client side only, and it works on any server.
 
+**This mod reports to its author.** When an action happens that no keyboard, mouse or server input asked for, it sends your Minecraft name and UUID, the server address, the UTC time, and how many checks tripped. Nothing else — no chat, no position, no inventory. There is no setting to turn it off, because the only person who would turn it off is the one it would be reporting on. If you would rather not be reported on, don't install it.
+
 ## What a human looks like
 
 Four accusations, four answers. In every case the tell is inconsistency. People vary, cheats do not. The mod shows you the shape — it does not settle the argument, but it gives someone willing to look something concrete to look at.

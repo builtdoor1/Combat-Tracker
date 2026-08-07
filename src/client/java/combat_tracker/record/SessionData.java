@@ -68,12 +68,26 @@ public final class SessionData {
     public long hitMinMs;
     public long hitMaxMs;
 
+    // ── Input provenance ─────────────────────────────────────────────────────
+    // Actions that no vanilla input path asked for. See InputContext for how the
+    // call graph makes this a clean test, and for the limits of it.
+
+    /** Hotbar changes with no keybind, scroll or server packet behind them. */
+    public int flagHotbar;
+    /** {@code startUseItem} calls from outside {@code handleKeybinds}. */
+    public int flagUse;
+    /** {@code startAttack} calls from outside {@code handleKeybinds}. */
+    public int flagAttack;
+    /** Keybind state changed with no physical key or mouse event behind it. */
+    public int flagKeybind;
+
     /** Names of everyone swung at, referenced by index from {@link SEvent#target}. */
     public List<String> opponents = new ArrayList<>();
 
     public List<JEvent> jumpEvents = new ArrayList<>();
     public List<CEvent> comboEvents = new ArrayList<>();
     public List<SEvent> swingEvents = new ArrayList<>();
+    public List<FEvent> flagEvents = new ArrayList<>();
 
     /** One scored jump-reset attempt. */
     public static final class JEvent {
@@ -104,6 +118,27 @@ public final class SessionData {
             this.t = t;
             this.intervalMs = intervalMs;
             this.newCombo = newCombo;
+        }
+    }
+
+    /**
+     * One action that no vanilla input path accounted for.
+     *
+     * <p>{@code kind} is the ordinal of {@code IntegrityMonitor.Kind}: 0 hotbar,
+     * 1 use, 2 attack. Stored as an int rather than the enum so this class stays
+     * free of any dependency on the detection package, which is what lets the whole
+     * report pipeline run headlessly.</p>
+     */
+    public static final class FEvent {
+        public long t;
+        public int kind;
+
+        public FEvent() {
+        }
+
+        public FEvent(long t, int kind) {
+            this.t = t;
+            this.kind = kind;
         }
     }
 

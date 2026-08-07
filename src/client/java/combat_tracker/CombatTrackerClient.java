@@ -3,8 +3,11 @@ package combat_tracker;
 import combat_tracker.config.CtConfig;
 import combat_tracker.detection.ClickTimestamps;
 import combat_tracker.detection.ComboTracker;
+import combat_tracker.detection.InputContext;
+import combat_tracker.detection.IntegrityMonitor;
 import combat_tracker.detection.JumpResetTracker;
 import combat_tracker.detection.LatencyEstimator;
+import combat_tracker.detection.WebhookNotifier;
 import combat_tracker.record.SessionRecorder;
 import combat_tracker.stats.ComboStatsTracker;
 import combat_tracker.stats.StatsTracker;
@@ -104,10 +107,19 @@ public class CombatTrackerClient implements ClientModInitializer {
         if (player != null && client.level != null) {
             tracker.tick(client);
             ComboTracker.get().tick(player);
+            // Resolves any hotbar change seen this tick, including one that never
+            // went through setSelectedSlot at all.
+            IntegrityMonitor.get().tick(player);
+            WebhookNotifier.get().tick();
             // Ping and identity are both captured while playing rather than at the
             // moment the report is written, when the player may already be gone.
             SessionRecorder.get().samplePing(LatencyEstimator.get().currentMs());
             SessionRecorder.get().noteIdentity(player.getName().getString(), player.getUUID().toString());
         }
+
+        // Last thing in the tick: none of the vanilla input windows span a tick, so
+        // anything still open is leftover state that would otherwise excuse the next
+        // detection. See InputContext.resetForTick().
+        InputContext.resetForTick();
     }
 }

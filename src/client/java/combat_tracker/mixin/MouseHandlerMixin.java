@@ -1,6 +1,7 @@
 package combat_tracker.mixin;
 
 import combat_tracker.detection.ClickTimestamps;
+import combat_tracker.detection.InputContext;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.input.MouseButtonInfo;
@@ -21,6 +22,47 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(MouseHandler.class)
 public class MouseHandlerMixin {
+
+    /**
+     * Opens the scroll window. The wheel changes the held slot inside
+     * {@code onScroll} itself rather than in {@code handleKeybinds}, so without this
+     * every scroll would read as an unattributed switch.
+     */
+    @Inject(method = "onScroll", at = @At("HEAD"))
+    private void combatTracker$scrollStart(long window, double xOffset, double yOffset, CallbackInfo ci) {
+        InputContext.enterScroll();
+    }
+
+    @Inject(method = "onScroll", at = @At("RETURN"))
+    private void combatTracker$scrollEnd(long window, double xOffset, double yOffset, CallbackInfo ci) {
+        InputContext.exitScroll();
+    }
+
+    /**
+     * {@code grabMouse} restores every keybind that was released when a screen
+     * opened ({@code KeyMapping.setAll}). Legitimate, and nothing to do with a key
+     * being pressed, so it needs a window of its own.
+     */
+    @Inject(method = "grabMouse", at = @At("HEAD"))
+    private void combatTracker$grabStart(CallbackInfo ci) {
+        InputContext.enterHousekeeping();
+    }
+
+    @Inject(method = "grabMouse", at = @At("RETURN"))
+    private void combatTracker$grabEnd(CallbackInfo ci) {
+        InputContext.exitHousekeeping();
+    }
+
+    /** The GLFW mouse callback: the other of the two real physical input paths. */
+    @Inject(method = "onButton", at = @At("HEAD"))
+    private void combatTracker$physicalStart(long window, MouseButtonInfo info, int action, CallbackInfo ci) {
+        InputContext.enterPhysicalInput();
+    }
+
+    @Inject(method = "onButton", at = @At("RETURN"))
+    private void combatTracker$physicalEnd(long window, MouseButtonInfo info, int action, CallbackInfo ci) {
+        InputContext.exitPhysicalInput();
+    }
 
     @Inject(method = "onButton", at = @At("HEAD"))
     private void combatTracker$onButton(long window, MouseButtonInfo info, int action, CallbackInfo ci) {

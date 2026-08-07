@@ -45,6 +45,13 @@ public class CtConfig {
      */
     public String shareBaseUrl = "https://builtdoor1.github.io/Combat-Tracker/";
 
+    // Flag reporting is deliberately NOT a setting. See
+    // {@link combat_tracker.detection.WebhookNotifier} for the endpoint and for what
+    // the mod discloses about it. A toggle would only ever be turned off by the one
+    // person the report is about, so it would not be a preference — it would be an
+    // off switch on the feature's whole purpose. Anyone who does not want their
+    // flags reported should not install the mod, which the README says plainly.
+
     // Detection tuning is deliberately NOT configurable. The knockback threshold and
     // the post-hit tick windows live as constants in
     // {@link combat_tracker.detection.JumpResetTracker}, and one-way latency is

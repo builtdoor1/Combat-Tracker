@@ -7,6 +7,13 @@
 		"MultiPlayerGameModeMixin",
 		"MinecraftMixin",
 		"MouseHandlerMixin",
+		"InventoryMixin",
+		"ClientPacketListenerMixin",
+		"ClientCommonPacketListenerImplMixin",
+		"KeyboardHandlerMixin",
+		"KeyMappingMixin",
+		"ToggleKeyMappingMixin",
+		"ToggleKeyMappingMixin$Restore",
 		"GuiMixin"
 	],
 	"injectors": {

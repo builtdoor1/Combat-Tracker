@@ -39,6 +39,38 @@ loom {
 	}
 }
 
+// ── Alert endpoint ───────────────────────────────────────────────────────────
+// Baked into the jar at build time from a Gradle property, so the URL never has to
+// live in a tracked file. Set it in ~/.gradle/gradle.properties (outside this repo):
+//
+//     combatTrackerAlertEndpoint=https://...
+//
+// Left unset — on a fresh clone, on CI — this writes an empty file and the mod
+// reports nowhere, which is the correct default for a public repository. Note the
+// endpoint is still readable inside any jar built with it set; keeping it out of git
+// protects the repository and its history, not the artifact. See WebhookNotifier.
+def alertEndpointFile = layout.buildDirectory.file('generated/alerts/combat_tracker/alert-endpoint.txt')
+
+tasks.register('generateAlertEndpoint') {
+	def endpoint = (project.findProperty('combatTrackerAlertEndpoint') ?: '').toString().trim()
+	inputs.property 'endpoint', endpoint
+	outputs.file alertEndpointFile
+	doLast {
+		def f = alertEndpointFile.get().asFile
+		f.parentFile.mkdirs()
+		f.text = endpoint
+		logger.lifecycle(endpoint.isEmpty()
+				? 'Combat Tracker: no alert endpoint set, reporting disabled in this build'
+				: 'Combat Tracker: alert endpoint baked in (' + endpoint.length() + ' chars)')
+	}
+}
+
+sourceSets.client.resources.srcDir(layout.buildDirectory.dir('generated/alerts'))
+// Every task that reads the client resource tree needs the generator to have run —
+// sourcesJar consumes it too, and Gradle rejects the implicit dependency.
+tasks.matching { it.name in ['processClientResources', 'sourcesJar', 'clientSourcesJar'] }
+		.configureEach { dependsOn 'generateAlertEndpoint' }
+
 dependencies {
 	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"

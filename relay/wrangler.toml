@@ -1,0 +1,8 @@
+name = "combat-tracker-relay"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# The Discord webhook URL is NOT here. It is a secret, set once with:
+#   npx wrangler secret put DISCORD_WEBHOOK
+# Secrets live in Cloudflare, not in this file, so this whole directory is safe to
+# commit.

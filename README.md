@@ -8,6 +8,8 @@ Got accused of reach, killaura, autoclicker or auto jump-reset? Hit record, play
 
 It never touches your gameplay. It cannot help you aim, reach further, click faster or reset better. It only watches and writes down what already happened.
 
+> **This mod reports to its author.** When an action happens that no keyboard, mouse or server input asked for, it sends your Minecraft name and UUID, the server address, the UTC time, and how many checks tripped. Nothing else. There is no setting to turn it off — the only person who would is the one it would be reporting on. If you would rather not be reported on, don't install it.
+
 ---
 
 ## Contents

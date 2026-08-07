@@ -55,7 +55,13 @@ public class SessionRecorder {
     private final List<SessionData.JEvent> jumps = new ArrayList<>();
     private final List<SessionData.CEvent> combos = new ArrayList<>();
     private final List<SessionData.SEvent> swings = new ArrayList<>();
+    private final List<SessionData.FEvent> flags = new ArrayList<>();
     private final List<String> opponents = new ArrayList<>();
+
+    private int flagHotbar;
+    private int flagUse;
+    private int flagAttack;
+    private int flagKeybind;
 
     /** Link for the most recently saved session, or null if there isn't one yet. */
     private String lastShareLink = null;
@@ -103,7 +109,12 @@ public class SessionRecorder {
         jumps.clear();
         combos.clear();
         swings.clear();
+        flags.clear();
         opponents.clear();
+        flagHotbar = 0;
+        flagUse = 0;
+        flagAttack = 0;
+        flagKeybind = 0;
         pingSumMs = 0;
         pingSamples = 0;
         playerName = null;
@@ -113,6 +124,7 @@ public class SessionRecorder {
             playerName = self.getName().getString();
             playerUuid = self.getUUID().toString();
         }
+        combat_tracker.detection.WebhookNotifier.get().resetBudget();
         chat("Recording started", ChatFormatting.GREEN);
     }
 
@@ -148,6 +160,28 @@ public class SessionRecorder {
     public void recordCombo(long intervalMs, boolean newCombo) {
         if (recording) {
             combos.add(new SessionData.CEvent(System.currentTimeMillis(), intervalMs, newCombo));
+        }
+    }
+
+    /**
+     * One action with no vanilla input behind it. See {@code IntegrityMonitor}.
+     *
+     * <p>Counted even past {@code maxEvents} so the totals stay honest; only the
+     * plotted timeline stops growing. A session that trips this thousands of times
+     * is already described by the first couple of hundred.</p>
+     */
+    public void recordFlag(combat_tracker.detection.IntegrityMonitor.Kind kind, int maxEvents) {
+        if (!recording) {
+            return;
+        }
+        switch (kind) {
+            case HOTBAR -> flagHotbar++;
+            case USE -> flagUse++;
+            case ATTACK -> flagAttack++;
+            case KEYBIND -> flagKeybind++;
+        }
+        if (flags.size() < maxEvents) {
+            flags.add(new SessionData.FEvent(System.currentTimeMillis(), kind.ordinal()));
         }
     }
 
@@ -259,7 +293,12 @@ public class SessionRecorder {
         d.jumpEvents = new ArrayList<>(jumps);
         d.comboEvents = new ArrayList<>(combos);
         d.swingEvents = new ArrayList<>(swings);
+        d.flagEvents = new ArrayList<>(flags);
         d.opponents = new ArrayList<>(opponents);
+        d.flagHotbar = flagHotbar;
+        d.flagUse = flagUse;
+        d.flagAttack = flagAttack;
+        d.flagKeybind = flagKeybind;
         // Mean across the whole recording, not a reading taken at the moment you
         // stopped. Context only; it adjusts no measurement.
         d.pingMs = pingSamples == 0 ? 0 : (double) pingSumMs / pingSamples;

@@ -33,11 +33,12 @@ public final class SharePayload {
     /**
      * Bump only for an incompatible layout change; the viewer decodes each version.
      *
-     * <p>v2 added median ping and the successful-reset summary. v1 links stay
-     * readable — the viewer branches on this byte, which is the whole reason it is
-     * written first.</p>
+     * <p>v2 added median ping and the successful-reset summary. v3 added the session
+     * title. v4 appends the input-provenance flag counts and their timeline. v1
+     * links stay readable — the viewer branches on this byte, which is the whole
+     * reason it is written first.</p>
      */
-    private static final int FORMAT_VERSION = 3;
+    private static final int FORMAT_VERSION = 4;
 
     /** Leaves room for surrounding text in a 2000-character Discord message. */
     public static final int DEFAULT_MAX_CHARS = 1800;
@@ -188,6 +189,22 @@ public final class SharePayload {
             b.zig(Math.round(e.offY * 1000.0));
             // target is >= -1, so +1 keeps it non-negative with the hit bit below it
             b.varInt(((e.target + 1) << 1) | (e.hit ? 1 : 0));
+        }
+
+        // v4: input-provenance flags, appended last so a v3 reader that stops here
+        // still gets every field it knows about in the order it expects.
+        b.varInt(d.flagHotbar);
+        b.varInt(d.flagUse);
+        b.varInt(d.flagAttack);
+        b.varInt(d.flagKeybind);
+        List<SessionData.FEvent> fs = sample(d.flagEvents, limit);
+        b.varInt(d.flagEvents.size());
+        b.varInt(fs.size());
+        prev = d.startEpochMs;
+        for (SessionData.FEvent e : fs) {
+            b.varLong(Math.max(0, e.t - prev));
+            prev = e.t;
+            b.varInt(e.kind);
         }
         return b.toByteArray();
     }

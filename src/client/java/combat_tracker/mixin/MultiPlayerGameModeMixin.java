@@ -1,6 +1,7 @@
 package combat_tracker.mixin;
 
 import combat_tracker.detection.ComboTracker;
+import combat_tracker.detection.IntegrityMonitor;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -20,6 +21,12 @@ public class MultiPlayerGameModeMixin {
 
     @Inject(method = "attack(Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/entity/Entity;)V", at = @At("HEAD"))
     private void jumpResetTracker$onAttack(Player player, Entity target, CallbackInfo ci) {
+        // Checking here as well as in startAttack closes a killaura that calls
+        // mc.gameMode.attack(player, target) directly: that never touches
+        // Minecraft.startAttack, so the check one layer up never runs. Vanilla only
+        // reaches this from startAttack, which is itself only reached from
+        // handleKeybinds, so the keybind window is open on every legitimate path.
+        IntegrityMonitor.get().onAttack();
         ComboTracker.get().onAttack(target);
     }
 }
