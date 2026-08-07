@@ -106,6 +106,9 @@ public class MinecraftMixin {
      */
     @Inject(method = "startUseItem", at = @At("HEAD"))
     private void combatTracker$onStartUseItem(CallbackInfo ci) {
+        // Look at the slot here, not just at the tick boundary: a swap and an
+        // immediate swap-back around this call would otherwise net to zero.
+        IntegrityMonitor.get().checkSlotNow();
         IntegrityMonitor.get().onUseItem();
     }
 
@@ -115,6 +118,7 @@ public class MinecraftMixin {
 
         // Same test as startUseItem: the only vanilla caller is handleKeybinds, so
         // an attack from anywhere else was not driven by the attack key.
+        IntegrityMonitor.get().checkSlotNow();
         IntegrityMonitor.get().onAttack();
 
         // Claim the click behind this swing before any guard can return early, so a

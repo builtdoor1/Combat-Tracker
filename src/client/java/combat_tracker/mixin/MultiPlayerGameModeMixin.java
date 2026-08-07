@@ -26,6 +26,7 @@ public class MultiPlayerGameModeMixin {
         // Minecraft.startAttack, so the check one layer up never runs. Vanilla only
         // reaches this from startAttack, which is itself only reached from
         // handleKeybinds, so the keybind window is open on every legitimate path.
+        IntegrityMonitor.get().checkSlotNow();
         IntegrityMonitor.get().onAttack();
         ComboTracker.get().onAttack(target);
     }

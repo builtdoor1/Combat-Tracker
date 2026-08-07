@@ -1,6 +1,7 @@
 package combat_tracker.detection;
 
 import combat_tracker.record.SessionRecorder;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 
 import java.lang.ref.WeakReference;
@@ -63,7 +64,7 @@ public final class IntegrityMonitor {
      * conclude nothing happened — which is exactly the shape of an auto-disable that
      * switches to an axe, hits, and switches back.</p>
      */
-    private int lastSlot = -1;
+    private final SlotLedger slots = new SlotLedger();
 
     /** Weak so a stale player can never be what keeps a world in memory. */
     private WeakReference<LocalPlayer> lastPlayer;
@@ -102,7 +103,7 @@ public final class IntegrityMonitor {
         useFlags = 0;
         attackFlags = 0;
         keybindFlags = 0;
-        lastSlot = -1;
+        slots.clear();
         lastPlayer = null;
     }
 
@@ -131,18 +132,10 @@ public final class IntegrityMonitor {
      * event, so every one gets its own verdict.</p>
      */
     public void noteSetterCall(int newSlot, InputContext.Source source) {
-        // A "switch" to the slot already held moves nothing. Counting it would add
-        // noise proportional to how often something re-asserts the current slot.
-        if (newSlot == lastSlot) {
-            return;
-        }
-        if (source == InputContext.Source.NONE) {
+        if (slots.accountFor(newSlot, source != InputContext.Source.NONE)) {
             hotbarFlags++;
             record(Kind.HOTBAR);
         }
-        // Accounted for either way: the tick sweep only needs to catch changes that
-        // never came through here at all.
-        lastSlot = newSlot;
     }
 
     /**
@@ -182,33 +175,42 @@ public final class IntegrityMonitor {
      * detection.</p>
      */
     public void tick(LocalPlayer player) {
-        int slot = player.getInventory().getSelectedSlot();
+        resolve(player);
+    }
 
-        // A respawn does not move the slot — it replaces the player. handleRespawn
-        // builds a brand-new LocalPlayer, so the inventory is new and selected is 0,
-        // and nothing calls the setter on the way. Without this the first tick after
-        // every death that happened on a non-zero slot reports a switch that never
-        // occurred, which in a PvP session means one bogus flag per death. Dimension
-        // changes and joining a world take the same path.
+    /**
+     * Checks the slot at the moment an action is taken, not only at the tick
+     * boundary.
+     *
+     * <p>This is what closes the write-act-revert hole. A cheat that writes the
+     * private {@code selected} field, swings, and writes it straight back finishes
+     * the tick on the slot it started on, so an end-of-tick comparison sees nothing
+     * whatsoever. At the moment of the swing the slot is somewhere the ledger never
+     * agreed to, and that is when this looks.</p>
+     */
+    public void checkSlotNow() {
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (player != null) {
+            resolve(player);
+        }
+    }
+
+    /**
+     * Compares the live slot against the ledger.
+     *
+     * <p>A replaced player is a new baseline, not a switch: {@code handleRespawn}
+     * builds a fresh {@code LocalPlayer} on slot 0 with no setter call, so without
+     * this every death from a non-zero slot would be reported.</p>
+     */
+    private void resolve(LocalPlayer player) {
         if (lastPlayer == null || lastPlayer.get() != player) {
             lastPlayer = new WeakReference<>(player);
-            lastSlot = slot;
+            slots.reseed(player.getInventory().getSelectedSlot());
             return;
         }
-
-        if (lastSlot == -1) {
-            lastSlot = slot;
-            return;
-        }
-
-        // Every route through setSelectedSlot has already updated lastSlot, so a
-        // difference here means the private field was written behind the setter's
-        // back — reflection, an access widener, or another mixin. Vanilla never
-        // does that.
-        if (slot != lastSlot) {
+        if (slots.observe(player.getInventory().getSelectedSlot())) {
             hotbarFlags++;
             record(Kind.HOTBAR);
-            lastSlot = slot;
         }
     }
 
