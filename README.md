@@ -1,6 +1,6 @@
 # Combat Tracker
 
-Proof that you're not cheating.
+Shows what your fights actually looked like.
 
 A client-side [Fabric](https://fabricmc.net/) mod for **Minecraft 1.21.11** that measures how you fight and turns it into a report you can show people. By *builtdoor*.
 
@@ -14,20 +14,20 @@ It never touches your gameplay. It cannot help you aim, reach further, click fas
 
 - [What it measures](#what-it-measures) · [Install](#install) · [Using it](#using-it)
 - [Recording a fight](#recording-a-fight) · [Reading your report](#reading-your-report) · [Sharing a fight](#sharing-a-fight)
-- [What this can and can't prove](#what-this-can-and-cant-prove) · [Settings](#settings) · [Files](#files)
+- [What this can and can't show](#what-this-can-and-cant-show) · [Settings](#settings) · [Files](#files)
 - [How it works under the hood](#how-it-works-under-the-hood) · [Building from source](#building-from-source) · [Credits](#credits)
 
 ---
 
 ## What it measures
 
-Four accusations, four answers. In every case the thing that clears you is inconsistency: humans vary, cheats don't.
+Four accusations, four answers. In every case the tell is inconsistency: humans vary, cheats don't. The mod shows you the shape — it doesn't settle the argument, but it gives someone willing to look something concrete to look at.
 
-| Accusation | What the mod shows | What clears you |
+| Accusation | What the mod shows | What a human looks like |
 |---|---|---|
 | *"You're auto jump-resetting"* | The millisecond gap between getting hit and jumping | Human timing varies by tens of milliseconds. A macro repeats nearly the same number. |
 | *"You're using a triggerbot / autoclicker"* | The gap between each hit in a combo | Human clicking jitters. A bot's interval is machine-steady. |
-| *"You have reach"* | How far the target was on every swing, hit or miss | Your hits sit at or under vanilla's 3.0 blocks. |
+| *"You have reach"* | How far the target was on every swing, hit or miss | Hits sit at or under vanilla's 3.0 blocks, and the misses above it are swings thrown from too far — which is what a person does. |
 | *"You have aimbot"* | Where your crosshair sat on their hitbox | Human aim is scattered across the body. Aim assist clusters on centre. |
 
 ---
@@ -109,25 +109,26 @@ Stopping a recording prints a click-to-copy link. **Copy share link** in the set
 
 Open it and you get the same charts, with your username and skin at the top, plus whoever you fought.
 
-Nothing gets uploaded. The whole fight is compressed into the link itself, into the part after the `#`, which browsers never send to any server. There's no account, no server keeping your fights, and nothing that can go offline or leak later. The page just unpacks the link in your browser.
+The fight data is never uploaded. It's compressed into the part of the link after the `#`, which browsers never send to any server. There's no account and no server keeping your fights — the page just unpacks the link in your browser. One exception worth naming: the page fetches player heads from `mc-heads.net`, so that service sees the names on the report.
 
-Links stay under 1800 characters so they fit in a Discord message. If a fight was long, the charts show an evenly spaced sample of it and the page says so. The headline numbers are always calculated from every event.
+Links stay under 1800 characters so they fit in a Discord message. If a fight was long, the charts show an evenly spaced sample of it and the page says so. The mod computes the headline numbers from every event, not from the sampled points — but the viewer prints whatever numbers the link carries and never re-derives them from the plotted points. On a link you didn't make yourself, check that the cards and the graph agree.
 
-> A shared link names the people you fought. Fine for public PvP, but worth knowing before you post it.
+> A shared link names the people you fought. Fine for public PvP, but worth knowing before you post it. The reverse is also true: the name and skin at the top of a link are just text in the payload, so anyone can produce a link that appears to be someone else's.
 
 ---
 
-## What this can and can't prove
+## What this can and can't show
 
-**What it does well:** it shows the natural inconsistency of a real person playing, which is hard to fake convincingly and is usually what an admin wants to see.
+**What it does well:** it makes the texture of your play visible — scattered aim versus a knot on centre, timing that wanders versus timing that doesn't. That's what an admin is actually trying to see, and it reads off a chart in ten seconds where it takes twenty minutes of clips.
 
 **What it isn't:**
 
-- **Not unforgeable.** Every report carries a SHA-256 hash and a signature, so casual editing of the file gets caught. But the signing key ships inside this open-source mod, so anyone who recompiles it can generate whatever numbers they like. Real proof would need a trusted server or a video, which no client-side mod can provide.
+- **The share link proves nothing.** It carries no signature at all. It's deflate + base64url of the struct documented below, and the viewer's only check is that the version byte is in range. Anyone can write one from scratch in about a hundred lines of Python, in any name they like, and the page will fetch that player's real skin to go with it. No mod, no recompile.
+- **The saved files are a checksum, not a seal.** The `.json` and `.html` carry a SHA-256 and an HMAC-SHA256 over the exact recorded data, and `linkifyReports` now recomputes both before it will rebuild a link from a report. That catches a corrupted file and it catches someone editing the numbers in a text editor. It does not stop anyone who edits the numbers *and* recomputes the two values, because the HMAC key is a string literal in this repo. There is nothing secret here.
 - **Reach and aim are measured on your computer.** Other players' positions are guessed between updates on your end, and the server saw them slightly differently depending on your ping. These figures won't exactly match a server anti-cheat's.
 - **It can't prove a negative.** It shows what your fights looked like. Someone determined not to believe you still won't.
 
-Treat a report as strong supporting evidence, not a verdict.
+Real proof would need a trusted server or a video, which no client-side mod can provide. A report is a record of what a fight looked like. To someone who already has reason to take you seriously it's worth a lot, because it shows a shape that's tedious to fake and instant to read. To someone who doesn't, it's worth nothing, and you should expect them to say so.
 
 ---
 
@@ -149,7 +150,7 @@ Treat a report as strong supporting evidence, not a verdict.
 
 **Timing** has one setting: the success window (default `0` to `80 ms`), which decides what counts as a successful reset. It changes the scoring only, never the measurement.
 
-Everything else about detection is fixed and not adjustable. A wrong value would quietly corrupt the numbers this mod exists to defend, and a report only means something if every copy of the mod measured the same way.
+Everything else about detection is fixed and not adjustable. A wrong value would quietly corrupt the numbers, and two reports are only comparable if both were measured the same way.
 
 **Recording** has Start/Stop Recording, Open recordings folder, Copy share link, and **Reset stats** (clears jump-reset and combo history, click twice to confirm).
 
@@ -235,20 +236,26 @@ The session is quantised to integers (reach to centiblocks, angles to centidegre
 
 The viewer ([`docs/index.html`](docs/index.html)) decodes it with the browser-native `DecompressionStream('deflate-raw')`. No JavaScript libraries are involved.
 
-To fit Discord's 2000-character message limit, a binary search finds the largest number of plotted points that fits the budget. Summary statistics are always computed over every event and encoded exactly, so only graph resolution degrades, and the viewer states "showing N of M" when it does.
+To fit Discord's 2000-character message limit, a binary search finds the largest number of plotted points that fits the budget. Summary statistics are computed over every event before any downsampling and encoded exactly, so only graph resolution degrades, and the viewer states "showing N of M" when it does.
+
+Note that this is a property of the encoder, not a checkable property of a link. The viewer renders the summary fields as given and never re-derives them from the plotted points, so on a forged link the cards and the graph need not agree.
 
 The payload starts with a version byte and that's a permanent contract: links already shared have to keep working, so the viewer decodes every past version. v1 links still render.
 
 </details>
 
 <details>
-<summary><b>Integrity block</b></summary>
+<summary><b>Checksums, and what they aren't</b></summary>
 
-Each session embeds a SHA-256 hash and an HMAC-SHA256 signature over the exact canonical data, plus start and end timestamps. Editing the file breaks the hash, so casual tampering is detectable.
+Each saved session embeds a SHA-256 hash and an HMAC-SHA256 over the exact canonical data. Both catch a corrupted or truncated file, and both catch a file someone edited and left alone afterwards. Neither survives contact with someone who edits the data *and* recomputes the two values: the hash sits next to the data it covers, and the HMAC key is the string literal in [`IntegrityUtil.java`](src/client/java/combat_tracker/record/IntegrityUtil.java). There is nothing secret here.
 
-Verify independently by recomputing SHA-256 over the exact `canonicalData` string (UTF-8) in the `.json`.
+Recompute SHA-256 over the exact `canonicalData` string (UTF-8) to confirm a `.json` arrived intact. That is the entire scope of what it tells you — it says nothing about where the numbers came from.
 
-As stated above: the signing key ships in the mod, so this is tamper-evidence, not unforgeable proof.
+`linkifyReports` recomputes both before it will rebuild a share link, and writes a link only for a report that still matches its own hashes. For a long time it didn't, which made it the easiest way to launder edited numbers: change the figures in the canonical block with a text editor, run the tool, and out came a clean-looking link while the untouched hash a few lines above still described the data the report used to hold.
+
+Anything it cannot check is refused rather than downgraded — a missing integrity block, an unreadable one, or two canonical blocks where there should be one. A link carries no verdict, so a link written for a report that failed to verify would be indistinguishable from any other once it left the machine that made it.
+
+**Share links carry neither value.** `SharePayload.pack()` writes a version byte and the data, and that's all; the viewer checks the version byte is in range and renders whatever it finds.
 
 </details>
 

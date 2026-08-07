@@ -4,9 +4,9 @@ Got accused of reach, killaura, autoclicker or auto jump-reset? Hit record, play
 
 It never touches your gameplay. It cannot help you aim, reach further, click faster or reset better. It only watches and writes down what already happened. Client side only, and it works on any server.
 
-## What clears you
+## What a human looks like
 
-Four accusations, four answers. In every case the thing that clears you is inconsistency. People vary, cheats do not.
+Four accusations, four answers. In every case the tell is inconsistency. People vary, cheats do not. The mod shows you the shape — it does not settle the argument, but it gives someone willing to look something concrete to look at.
 
 ### Jump resets
 
@@ -67,25 +67,27 @@ On every chart you can click a point for its exact value, scroll to zoom, drag t
 
 Stopping a recording also gives you a click to copy link.
 
-Nothing is uploaded. The whole fight is compressed into the link itself, into the part after the `#`, which browsers never send to any server. There is no account, no server holding your fights, and nothing that can leak later. The page at the other end just unpacks the link in your browser and draws the same charts, with your name and skin at the top.
+The fight data is never uploaded. It is compressed into the part of the link after the `#`, which browsers never send to any server. There is no account and no server holding your fights. The page at the other end just unpacks the link in your browser and draws the same charts, with your name and skin at the top. One exception worth naming: the page fetches player heads from `mc-heads.net`, so that service sees the names on the report.
 
-Links are kept short enough to paste into a Discord message. If a fight was long, the charts show an evenly spaced sample and the page says so. The summary numbers are always calculated from every event.
+Links are kept short enough to paste into a Discord message. If a fight was long, the charts show an evenly spaced sample and the page says so. The mod calculates the summary numbers from every event, though the viewer prints whatever the link carries rather than re-deriving them from the plotted points.
 
-Note that a shared link names the people you fought.
+Note that a shared link names the people you fought. The reverse is also true: the name and skin at the top of a link are just text in the payload, so anyone can produce a link that appears to be someone else's.
 
-## What this can and cannot prove
+## What this can and cannot show
 
 Being straight about it, because a tool like this is worthless if it oversells itself.
 
-It shows the natural inconsistency of a real person playing. That is hard to fake convincingly and is usually what an admin wants to see.
+It makes the texture of your play visible: scattered aim against a knot on centre, timing that wanders against timing that does not. That is what an admin is actually trying to see, and it reads off a chart in ten seconds where it takes twenty minutes of clips.
 
-It is not unforgeable. Every report carries a SHA-256 hash and a signature, so casual editing of the file gets caught, but the signing key ships inside this open source mod. Anyone who recompiles it can produce whatever numbers they like. Real proof would need a trusted server or a video, which no client side mod can provide.
+The share link proves nothing. It carries no signature at all, and the page that renders it only checks that the format version is one it knows. Anyone can write one from scratch in about a hundred lines of Python, in any name they like, and the page will fetch that player's real skin to go with it. No mod and no recompile required.
+
+The saved files are a checksum, not a seal. The HTML and JSON carry a SHA-256 and an HMAC-SHA256 over the recorded data, which catch a corrupted file and catch someone editing the numbers in a text editor. They do not stop anyone who edits the numbers and recomputes the two values, because the key ships inside this open source mod. Real proof would need a trusted server or a video, which no client side mod can provide.
 
 Reach and aim are measured on your computer. Other players' positions are estimated between updates on your end, and the server saw them slightly differently depending on your ping, so these figures will not exactly match a server anti-cheat's.
 
 It cannot prove a negative. It shows what your fights looked like. Someone determined not to believe you still will not.
 
-Treat a report as strong supporting evidence, not a verdict.
+A report is a record of what a fight looked like. To someone who already has reason to take you seriously it is worth a lot, because it shows a shape that is tedious to fake and instant to read. To someone who does not, it is worth nothing, and you should expect them to say so.
 
 ## Settings
 
@@ -93,7 +95,7 @@ Mod Menu, Combat Tracker, Config. Three tabs.
 
 **General** covers the overlay: show or hide, chat messages, compact layout, scale, background opacity, accent colour, and dragging the overlay anywhere on screen.
 
-**Timing** has the success window, which decides what counts as a successful reset. It changes the scoring only, never the measurement. Everything else about detection is fixed on purpose. A wrong value would quietly corrupt the numbers this mod exists to defend, and a report only means something if every copy measured the same way.
+**Timing** has the success window, which decides what counts as a successful reset. It changes the scoring only, never the measurement. Everything else about detection is fixed on purpose. A wrong value would quietly corrupt the numbers, and two reports are only comparable if both were measured the same way.
 
 **Recording** has the session controls, the recordings folder, copy share link, and reset stats.
 

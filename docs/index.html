@@ -372,8 +372,10 @@ function render(d) {
        `<a href="https://github.com/builtdoor1/Combat-Tracker" style="color:#29b6f6">Combat Tracker</a>, a ` +
        `client-side Minecraft mod that only observes. It never changes movement, reach or aim.` +
        `<br><br><span class="warn">Read honestly:</span> the session travels inside this link, so nothing was ` +
-       `uploaded and nothing verified it. Reach and aim are measured on the player's own client. Anyone who ` +
-       `recompiles the open-source mod can fabricate a link. Treat it as a record of a fight, not proof.</div>`;
+       `uploaded and nothing verified it. This page carries no signature to check — it renders what the link ` +
+       `says, including the name and skin above, which are just text in the payload. Anyone can write one of ` +
+       `these links from scratch in minutes, in any name, with no mod and no recompile. Reach and aim are ` +
+       `measured on the player's own client. Treat it as a record of a fight, not proof.</div>`;
 
   document.getElementById('app').innerHTML = h;
   attachPanZoom();
