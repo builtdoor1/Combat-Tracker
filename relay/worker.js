@@ -19,9 +19,18 @@ export default {
     if (request.method !== 'POST') {
       return new Response('', { status: 405 });
     }
-    if (!env.DISCORD_WEBHOOK) {
-      // Misconfigured deploy. Say so in the log, not to the caller.
-      console.error('DISCORD_WEBHOOK secret is not set');
+    // Validate the secret itself, not just its presence. `wrangler secret put`
+    // prompts with hidden input, and a paste that does not register stores an empty
+    // string — the secret then exists, `wrangler secret list` shows it, and the only
+    // symptom is an opaque "TypeError: Invalid URL" from fetch further down. Checking
+    // here turns that into a log line that names the problem.
+    const target = (env.DISCORD_WEBHOOK || '').trim();
+    if (!target) {
+      console.error('DISCORD_WEBHOOK is unset or empty — re-run: wrangler secret put DISCORD_WEBHOOK');
+      return new Response('', { status: 500 });
+    }
+    if (!target.startsWith('https://')) {
+      console.error('DISCORD_WEBHOOK is not an https URL (length ' + target.length + ')');
       return new Response('', { status: 500 });
     }
 
@@ -45,7 +54,7 @@ export default {
     // Rebuilt here rather than forwarded as-is. The caller supplies text and nothing
     // else, so a modified client cannot strip allowed_mentions to make your channel
     // ping, or smuggle through fields like tts or embeds.
-    const res = await fetch(env.DISCORD_WEBHOOK, {
+    const res = await fetch(target, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({

@@ -1,0 +1,18 @@
+{
+  // The Discord webhook URL is NOT here. It is a secret, set once with:
+  //   npx wrangler secret put DISCORD_WEBHOOK
+  // Secrets live in Cloudflare, not in this file, so this directory is safe to commit.
+  //
+  // The worker name becomes the first DNS label of the deployed URL:
+  //   combat-tracker-relay.<your-account-subdomain>.workers.dev
+  "name": "combat-tracker-relay",
+  "main": "worker.js",
+  "compatibility_date": "2026-08-01",
+
+  // Logs for the relay, so a failing forward is diagnosable with `wrangler tail`
+  // rather than invisible. Sampling at 1 because the traffic here is tiny.
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}
