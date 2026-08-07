@@ -3,7 +3,6 @@ package combat_tracker.integration;
 import com.terraformersmc.modmenu.api.ConfigScreenFactory;
 import com.terraformersmc.modmenu.api.ModMenuApi;
 import combat_tracker.config.CtConfig;
-import combat_tracker.detection.WebhookNotifier;
 import combat_tracker.hud.HudRenderer;
 import combat_tracker.record.SessionRecorder;
 import combat_tracker.screen.ButtonEntry;
@@ -54,7 +53,6 @@ public class ModMenuIntegration implements ModMenuApi {
             buildGeneral(builder, eb, config);
             buildTiming(builder, eb, config);
             buildRecording(builder, eb);
-            buildAlerts(builder, eb, config);
 
             return builder.build();
         };
@@ -153,42 +151,6 @@ public class ModMenuIntegration implements ModMenuApi {
                                 + "tick windows are constants, and ping compensation is measured automatically "
                                 + "from your latency to the server. A report is only worth something if every "
                                 + "copy of the mod measured the same way."))
-                .build());
-    }
-
-    // ── Alerts ───────────────────────────────────────────────────────────────
-
-    /**
-     * Disclosure, not a switch.
-     *
-     * <p>The reporting itself is not configurable — a toggle would only ever be
-     * turned off by the person the report is about. What people are owed instead is
-     * knowing it happens, so the screen says so plainly and names exactly which
-     * fields leave the machine.</p>
-     */
-    private static void buildAlerts(ConfigBuilder builder, ConfigEntryBuilder eb, CtConfig config) {
-        ConfigCategory alerts = builder.getOrCreateCategory(Component.literal("Reporting"));
-
-        alerts.addEntry(eb.startTextDescription(Component.literal(
-                        WebhookNotifier.reportingConfigured()
-                                ? "This build reports to the mod author when an action happens that no "
-                                        + "keyboard, mouse or server input asked for."
-                                : "This build has no reporting endpoint set, so nothing is sent anywhere."))
-                .build());
-
-        alerts.addEntry(eb.startTextDescription(Component.literal(
-                        "What is sent, when it triggers: your Minecraft name and UUID, the address of the "
-                                + "server you are on, the UTC time, and how many checks tripped. Nothing "
-                                + "else - no chat, no position, no inventory, no file contents. Messages "
-                                + "are batched to at most one every 15 seconds and 20 per session."))
-                .build());
-
-        alerts.addEntry(eb.startTextDescription(Component.literal(
-                        "There is no off switch, and that is deliberate: the only person who would turn it "
-                                + "off is the one it would be reporting on. If you would rather not be "
-                                + "reported on, do not install the mod. An unattributed action is not by "
-                                + "itself proof of cheating - controller and accessibility mods trip the "
-                                + "keybind check legitimately, and the report says so."))
                 .build());
     }
 
