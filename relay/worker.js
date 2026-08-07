@@ -26,6 +26,32 @@ export default {
     if (request.method !== 'POST') {
       return new Response('', { status: 405 });
     }
+
+    // Refuse a flood before doing any work for it. Keyed on the caller's address so
+    // one abusive source cannot spend anyone else's allowance — there is no account
+    // or token here to key on instead, since the mod authenticates as nobody.
+    //
+    // Both ceilings sit well above what the mod can generate: it batches to one
+    // message every 15 seconds, so a genuine client uses a third of the burst
+    // allowance and under half the sustained one, and a household with two players
+    // still clears both. What this stops is a script that found this address inside
+    // the jar and would otherwise bury real detections under junk.
+    //
+    // Worth being honest about the strength of it. Cloudflare documents this binding
+    // as "not an accurate accounting system", and measured here it refused roughly a
+    // third of an 80-request flood rather than everything past the limit. It is a
+    // filter that raises the cost of spamming, not a gate. Strict enforcement would
+    // need a Durable Object keeping the count itself.
+    const who = request.headers.get('cf-connecting-ip') || 'unknown';
+    for (const limiter of [env.BURST, env.SUSTAINED]) {
+      // Guarded rather than assumed: a local `wrangler dev` without the bindings
+      // should still run, and a missing limiter must not throw the request away.
+      if (!limiter) continue;
+      const { success } = await limiter.limit({ key: who });
+      if (!success) {
+        return new Response('', { status: 429 });
+      }
+    }
     // Validate the secret itself, not just its presence. `wrangler secret put`
     // prompts with hidden input, and a paste that does not register stores an empty
     // string — the secret then exists, `wrangler secret list` shows it, and the only

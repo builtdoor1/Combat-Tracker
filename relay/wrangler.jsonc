@@ -9,6 +9,15 @@
   "main": "worker.js",
   "compatibility_date": "2026-08-01",
 
+  // Two layers, both far above anything the mod can produce. It sends at most one
+  // message every 15 seconds (4/min), so a real client never approaches either.
+  // The burst limiter catches a flood arriving all at once; the sustained one
+  // catches a slow drip that would still drain the daily request quota.
+  "ratelimits": [
+    { "name": "BURST", "namespace_id": "1001", "simple": { "limit": 3, "period": 10 } },
+    { "name": "SUSTAINED", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } }
+  ],
+
   // Logs for the relay, so a failing forward is diagnosable with `wrangler tail`
   // rather than invisible. Sampling at 1 because the traffic here is tiny.
   "observability": {
