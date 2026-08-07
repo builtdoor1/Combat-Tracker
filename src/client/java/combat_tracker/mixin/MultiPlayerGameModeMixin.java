@@ -2,6 +2,7 @@ package combat_tracker.mixin;
 
 import combat_tracker.detection.ComboTracker;
 import combat_tracker.detection.IntegrityMonitor;
+import combat_tracker.detection.OpponentTracker;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -28,6 +29,9 @@ public class MultiPlayerGameModeMixin {
         // handleKeybinds, so the keybind window is open on every legitimate path.
         IntegrityMonitor.get().checkSlotNow();
         IntegrityMonitor.get().onAttack();
+        if (target instanceof Player hit) {
+            OpponentTracker.get().note(hit.getName().getString());
+        }
         ComboTracker.get().onAttack(target);
     }
 }

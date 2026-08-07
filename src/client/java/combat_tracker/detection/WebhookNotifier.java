@@ -14,8 +14,6 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 
 /**
  * Posts a Discord message when input-provenance checks trip.
@@ -78,9 +76,6 @@ public final class WebhookNotifier {
     private static final long WINDOW_MS = 15_000L;
     /** Hard stop per game session, so one bad session cannot flood a channel. */
     private static final int MAX_MESSAGES = 20;
-
-    private static final DateTimeFormatter UTC =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss 'UTC'").withZone(ZoneId.of("UTC"));
 
     private static final WebhookNotifier INSTANCE = new WebhookNotifier();
 
@@ -169,10 +164,12 @@ public final class WebhookNotifier {
                 player.getName().getString(),
                 player.getUUID().toString(),
                 describeServer(mc),
-                UTC.format(Instant.ofEpochMilli(now)),
+                // ISO-8601, so Discord renders it in each reader's own timezone.
+                Instant.ofEpochMilli(now).toString(),
                 pendingHotbar, pendingUse, pendingAttack, pendingKeybind,
                 SessionRecorder.get().isRecording(),
-                SessionRecorder.get().lastShareLink());
+                SessionRecorder.get().lastShareLink(),
+                OpponentTracker.get().recent());
     }
 
     /** Server address, or a plain marker for singleplayer. */

@@ -83,8 +83,10 @@ public final class SwingTracker {
         double aimDeg = angleBetween(look, centre.subtract(eye));
         double[] placement = placementOnHitbox(eye, look, box, centre);
 
+        String targetName = target.getName().getString();
+        OpponentTracker.get().note(targetName);
         SessionRecorder.get().recordSwing(
-                reach, landed, aimDeg, placement[0], placement[1], target.getName().getString());
+                reach, landed, aimDeg, placement[0], placement[1], targetName);
     }
 
     /**

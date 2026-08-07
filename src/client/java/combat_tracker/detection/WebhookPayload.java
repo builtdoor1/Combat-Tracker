@@ -16,55 +16,99 @@ package combat_tracker.detection;
  * </ul>
  *
  * <p>{@link #safe} then strips what would make the message lie — backticks would
- * close the code spans these values sit inside, and newlines would let a name append
+ * close the code spans values sit inside, and newlines would let a name append
  * convincing extra lines of its own.</p>
  */
 public final class WebhookPayload {
-    /** Discord's hard limit is 2000; leave room rather than court a 400. */
-    static final int MAX_CONTENT = 1800;
+    /** Discord's per-field limits. Values are kept well inside them. */
+    static final int MAX_FIELD_VALUE = 1024;
+
+    /** Amber. Chosen to read as "look at this", not as an error or an all-clear. */
+    private static final int COLOR = 0xFFB454;
+
+    /** Renders a player head from a name or UUID. Same service the reports use. */
+    private static final String HEAD_URL = "https://mc-heads.net/avatar/";
 
     private WebhookPayload() {
     }
 
-    /** The full JSON body for one alert. */
-    public static String build(String player, String uuid, String server, String whenUtc,
+    /**
+     * One alert as a Discord embed.
+     *
+     * @param whenIso ISO-8601 instant; Discord renders it in each reader's own
+     *                timezone, which beats printing one timezone at everyone
+     * @param opponent who they were fighting, or null if not recently in a fight
+     */
+    public static String build(String player, String uuid, String server, String whenIso,
                                int hotbar, int use, int attack, int keybind,
-                               boolean recording, String shareLink) {
-        StringBuilder s = new StringBuilder(512);
-        s.append("**Combat Tracker — unattributed input**\n");
-        s.append("Player: `").append(safe(player)).append("`  (`").append(safe(uuid)).append("`)\n");
-        s.append("Server: `").append(safe(server)).append("`\n");
-        s.append("Time: `").append(safe(whenUtc)).append("`\n");
-        s.append("Tripped: ")
-                .append(part("hotbar", hotbar)).append(part("use", use))
-                .append(part("attack", attack)).append(part("keybind", keybind)).append("\n");
+                               boolean recording, String shareLink, String opponent) {
+        String safePlayer = safe(player);
+        String safeUuid = safe(uuid);
+
+        StringBuilder fields = new StringBuilder();
+        // Each check gets its own line saying what it means, because "hotbar: 3" on
+        // its own tells a reader nothing about what was actually observed.
+        fields.append(explain("Hotbar switched", hotbar,
+                "changed slot with no key, scroll or server packet behind it"));
+        fields.append(explain("Item used", use,
+                "right-click use ran without the use key being pressed"));
+        fields.append(explain("Attacked", attack,
+                "an attack ran without the attack key being pressed"));
+        fields.append(explain("Keybind pressed by code", keybind,
+                "a key was held or clicked by software rather than by hand"));
+
+        StringBuilder f = new StringBuilder(1024);
+        f.append("{\"embeds\":[{");
+        f.append("\"title\":").append(jsonString("Unattributed input detected"));
+        f.append(",\"color\":").append(COLOR);
+        f.append(",\"timestamp\":").append(jsonString(safe(whenIso)));
+        // The head renders beside the embed, so an alert is identifiable at a glance
+        // rather than by reading a UUID.
+        f.append(",\"thumbnail\":{\"url\":")
+                .append(jsonString(HEAD_URL + urlSafe(safeUuid.isEmpty() ? safePlayer : safeUuid) + "/128"))
+                .append("}");
+        f.append(",\"author\":{\"name\":").append(jsonString(safePlayer))
+                .append(",\"icon_url\":").append(jsonString(HEAD_URL + urlSafe(safePlayer) + "/32")).append("}");
+
+        f.append(",\"fields\":[");
+        f.append(field("Player", "`" + safePlayer + "`\n`" + safeUuid + "`", false));
+        f.append(",").append(field("Server", "`" + safe(server) + "`", true));
+        f.append(",").append(field("Fighting",
+                opponent == null || opponent.isBlank() ? "_no recent opponent_" : "`" + safe(opponent) + "`", true));
+        f.append(",").append(field("What tripped", fields.toString().trim(), false));
         if (recording) {
-            s.append("Recording in progress.\n");
+            f.append(",").append(field("Recording", "in progress when this fired", true));
         }
         if (shareLink != null && !shareLink.isBlank()) {
-            // Angle brackets suppress Discord's link preview, which would otherwise
-            // make every alert several times taller than it needs to be.
-            s.append("Last session: <").append(safe(shareLink)).append(">\n");
+            f.append(",").append(field("Last session", "[open report](" + safe(shareLink) + ")", true));
         }
-        s.append("_An unattributed action is not by itself proof of cheating; ")
-                .append("controller and accessibility mods trip the keybind check legitimately._");
-
-        String content = s.toString();
-        if (content.length() > MAX_CONTENT) {
-            content = content.substring(0, MAX_CONTENT - 1) + "…";
-        }
-        return "{\"content\":" + jsonString(content) + ",\"allowed_mentions\":{\"parse\":[]}}";
+        f.append("]}]");
+        f.append(",\"allowed_mentions\":{\"parse\":[]}}");
+        return f.toString();
     }
 
-    private static String part(String label, int n) {
-        return n == 0 ? "" : n + " " + label + (n == 1 ? " " : "s ");
+    /** One "N x — what that means" line, omitted entirely when the count is zero. */
+    private static String explain(String label, int n, String meaning) {
+        if (n <= 0) {
+            return "";
+        }
+        return "**" + label + "** × " + n + "\n╰ _" + meaning + "_\n";
+    }
+
+    private static String field(String name, String value, boolean inline) {
+        String v = value == null || value.isBlank() ? "_none_" : value;
+        if (v.length() > MAX_FIELD_VALUE) {
+            v = v.substring(0, MAX_FIELD_VALUE - 1) + "…";
+        }
+        return "{\"name\":" + jsonString(name) + ",\"value\":" + jsonString(v)
+                + ",\"inline\":" + inline + "}";
     }
 
     /**
      * Strips what would let an untrusted string distort the message.
      *
      * <p>Long values are truncated: a 30k-character name would otherwise consume the
-     * whole content budget and push the real fields out of the message.</p>
+     * whole budget and push the real fields out of the embed.</p>
      */
     static String safe(String in) {
         if (in == null) {
@@ -77,7 +121,19 @@ public final class WebhookPayload {
         return out.isEmpty() ? "unknown" : out;
     }
 
-    /** Minimal JSON string escaping — one field does not justify a dependency. */
+    /**
+     * Restricts a value to what can appear in a URL path segment.
+     *
+     * <p>The head URL is built from a player name or UUID, and both are attacker
+     * supplied. Anything outside this set could otherwise steer the request at a
+     * different path or host entirely.</p>
+     */
+    static String urlSafe(String in) {
+        String out = in == null ? "" : in.replaceAll("[^A-Za-z0-9_-]", "");
+        return out.isEmpty() ? "steve" : out;
+    }
+
+    /** Minimal JSON string escaping — one payload does not justify a dependency. */
     static String jsonString(String s) {
         StringBuilder b = new StringBuilder(s.length() + 16).append('"');
         for (int i = 0; i < s.length(); i++) {
