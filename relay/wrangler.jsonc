@@ -9,6 +9,15 @@
   "main": "worker.js",
   "compatibility_date": "2026-08-01",
 
+  // One instance, reached by a fixed name, holds the per-minute send budget and
+  // the overflow. SQLite backend because that is the one the free plan supports.
+  "durable_objects": {
+    "bindings": [{ "name": "AGGREGATOR", "class_name": "AlertAggregator" }]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["AlertAggregator"] }
+  ],
+
   // Two layers, both far above anything the mod can produce. It sends at most one
   // message every 15 seconds (4/min), so a real client never approaches either.
   // The burst limiter catches a flood arriving all at once; the sustained one

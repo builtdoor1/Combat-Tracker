@@ -14,6 +14,41 @@
  * Then set the worker's https URL as combatTrackerAlertEndpoint in
  * ~/.gradle/gradle.properties and rebuild the mod.
  */
+// The Durable Object class has to be exported from the entrypoint Cloudflare loads.
+export { AlertAggregator } from './aggregator.js';
+
+/**
+ * Pulls the player and per-check counts out of the embed the mod sent, for the
+ * overflow summary. Both ends of this are ours, but a summary is not worth a
+ * failed request, so every step degrades instead of throwing: no author name means
+ * "unknown", unparseable counts mean the player is still named with no breakdown.
+ */
+function describe(embed) {
+  const player = embed && embed.author && typeof embed.author.name === 'string'
+      ? embed.author.name.slice(0, 80) : 'unknown';
+  const counts = { hotbar: 0, use: 0, attack: 0, keybind: 0 };
+  const field = embed && Array.isArray(embed.fields)
+      ? embed.fields.find(f => f.name === 'What tripped') : null;
+  if (field && typeof field.value === 'string') {
+    const map = {
+      'Hotbar switched': 'hotbar', 'Item used': 'use',
+      'Attacked': 'attack', 'Keybind pressed by code': 'keybind',
+    };
+    // Located by plain string search rather than a regex built from the label.
+    // Building one meant escaping the asterisks through two layers of quoting, and
+    // getting that wrong produced `**` at the start of a pattern — an invalid
+    // quantifier that threw on every single request.
+    for (const [label, key] of Object.entries(map)) {
+      const marker = '**' + label + '**';
+      const at = field.value.indexOf(marker);
+      if (at < 0) continue;
+      const digits = field.value.slice(at + marker.length, at + marker.length + 12).match(/\d+/);
+      if (digits) counts[key] = parseInt(digits[0], 10) || 0;
+    }
+  }
+  return { player, counts };
+}
+
 /** Only the head-render service may supply images, and only over https. */
 function imageOk(url) {
   return typeof url === 'string'
@@ -24,7 +59,7 @@ function imageOk(url) {
 export default {
   async fetch(request, env) {
     if (request.method !== 'POST') {
-      return new Response('', { status: 405 });
+      return new Response(null, { status: 405 });
     }
 
     // Refuse a flood before doing any work for it. Keyed on the caller's address so
@@ -49,7 +84,7 @@ export default {
       if (!limiter) continue;
       const { success } = await limiter.limit({ key: who });
       if (!success) {
-        return new Response('', { status: 429 });
+        return new Response(null, { status: 429 });
       }
     }
     // Validate the secret itself, not just its presence. `wrangler secret put`
@@ -60,25 +95,25 @@ export default {
     const target = (env.DISCORD_WEBHOOK || '').trim();
     if (!target) {
       console.error('DISCORD_WEBHOOK is unset or empty — re-run: wrangler secret put DISCORD_WEBHOOK');
-      return new Response('', { status: 500 });
+      return new Response(null, { status: 500 });
     }
     if (!target.startsWith('https://')) {
       console.error('DISCORD_WEBHOOK is not an https URL (length ' + target.length + ')');
-      return new Response('', { status: 500 });
+      return new Response(null, { status: 500 });
     }
 
     // Cap the body before parsing it. Without this a single large POST costs you
     // CPU time on every abusive request.
     const raw = await request.text();
     if (raw.length > 4000) {
-      return new Response('', { status: 413 });
+      return new Response(null, { status: 413 });
     }
 
     let body;
     try {
       body = JSON.parse(raw);
     } catch {
-      return new Response('', { status: 400 });
+      return new Response(null, { status: 400 });
     }
 
     // Accept either a plain message or a single embed, and rebuild the request from
@@ -88,12 +123,12 @@ export default {
     const out = { allowed_mentions: { parse: [] } };
 
     if (typeof body.content === 'string' && body.content.length > 0) {
-      if (body.content.length > 2000) return new Response('', { status: 400 });
+      if (body.content.length > 2000) return new Response(null, { status: 400 });
       out.content = body.content;
     }
 
     if (Array.isArray(body.embeds)) {
-      if (body.embeds.length > 1) return new Response('', { status: 400 });
+      if (body.embeds.length > 1) return new Response(null, { status: 400 });
       const e = body.embeds[0];
       if (e && typeof e === 'object') {
         const embed = {};
@@ -123,29 +158,39 @@ export default {
     }
 
     if (!out.content && !out.embeds) {
-      return new Response('', { status: 400 });
+      return new Response(null, { status: 400 });
     }
 
-    const res = await fetch(target, {
+    // Handed to the aggregator rather than sent from here. It holds the per-minute
+    // budget, and the budget only means anything if one place counts all of it.
+    // Falling back to a direct send when the binding is missing keeps a local
+    // `wrangler dev` working and means a misconfigured deploy degrades to the old
+    // behaviour rather than dropping alerts entirely.
+    if (!env.AGGREGATOR) {
+      const direct = await fetch(target, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(out),
+      });
+      return new Response(null, { status: direct.ok ? 204 : 502 });
+    }
+
+    const { player, counts } = describe(out.embeds && out.embeds[0]);
+    const id = env.AGGREGATOR.idFromName('global');
+    const stub = env.AGGREGATOR.get(id);
+    const r = await stub.fetch('https://aggregator/alert', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(out),
+      body: JSON.stringify({ payload: out, player, counts }),
     });
-
-    if (!res.ok) {
-      // Log what Discord objected to, not just that it objected. A 400 here names
-      // the offending field, and without it the only symptom is an opaque 502.
-      // Response bodies from Discord contain no secret — the webhook URL is never
-      // echoed back — so this is safe to log.
-      let detail = '';
-      try {
-        detail = (await res.text()).slice(0, 500);
-      } catch {
-        detail = '<unreadable>';
-      }
-      console.error('discord returned', res.status, detail);
-      return new Response('', { status: 502 });
+    if (!r.ok) {
+      console.error('aggregator returned', r.status);
+      return new Response(null, { status: 502 });
     }
-    return new Response('', { status: 204 });
+    // A held alert is not a failure: it arrives in the summary at the end of the
+    // window. Only a send that was attempted and refused by Discord is worth
+    // reporting back as one.
+    const verdict = await r.json();
+    return new Response(null, { status: verdict.sent && !verdict.ok ? 502 : 204 });
   },
 };
