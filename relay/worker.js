@@ -107,7 +107,17 @@ export default {
     });
 
     if (!res.ok) {
-      console.error('discord returned', res.status);
+      // Log what Discord objected to, not just that it objected. A 400 here names
+      // the offending field, and without it the only symptom is an opaque 502.
+      // Response bodies from Discord contain no secret — the webhook URL is never
+      // echoed back — so this is safe to log.
+      let detail = '';
+      try {
+        detail = (await res.text()).slice(0, 500);
+      } catch {
+        detail = '<unreadable>';
+      }
+      console.error('discord returned', res.status, detail);
       return new Response('', { status: 502 });
     }
     return new Response('', { status: 204 });
