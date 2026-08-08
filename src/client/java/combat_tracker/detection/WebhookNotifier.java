@@ -25,7 +25,7 @@ import java.time.Instant;
  * Posting one message each would be twenty a second, which Discord rate-limits
  * immediately and which makes the channel useless even if it did not. Flags are
  * accumulated and summarised at most once per {@link #WINDOW_MS}, and the whole
- * session is capped at {@link #MAX_MESSAGES} so a single bad session can never
+ * session is capped by {@link AlertSchedule} so a single bad session can never
  * flood a channel. The counts stay exact; only the number of messages is bounded.</p>
  *
  * <p><b>Never touches the game thread.</b> Sends are asynchronous and every failure
@@ -72,11 +72,6 @@ public final class WebhookNotifier {
         }
     }
 
-    /** Minimum spacing between messages. */
-    private static final long WINDOW_MS = 15_000L;
-    /** Hard stop per game session, so one bad session cannot flood a channel. */
-    private static final int MAX_MESSAGES = 20;
-
     private static final WebhookNotifier INSTANCE = new WebhookNotifier();
 
     public static WebhookNotifier get() {
@@ -85,10 +80,14 @@ public final class WebhookNotifier {
 
     private HttpClient http;
 
-    private int pendingHotbar;
-    private int pendingUse;
-    private int pendingAttack;
-    private int pendingKeybind;
+    // Running totals for the session, not just since the last alert. A follow-up
+    // that reported only the delta would make a persistent cheat look like it was
+    // tailing off, when the gaps are simply getting longer.
+    private int totalHotbar;
+    private int totalUse;
+    private int totalAttack;
+    private int totalKeybind;
+
     private long firstPendingMs;
     private long lastSentMs;
     private int sentThisSession;
@@ -102,10 +101,10 @@ public final class WebhookNotifier {
             return;
         }
         switch (kind) {
-            case HOTBAR -> pendingHotbar++;
-            case USE -> pendingUse++;
-            case ATTACK -> pendingAttack++;
-            case KEYBIND -> pendingKeybind++;
+            case HOTBAR -> totalHotbar++;
+            case USE -> totalUse++;
+            case ATTACK -> totalAttack++;
+            case KEYBIND -> totalKeybind++;
         }
         if (firstPendingMs == 0L) {
             firstPendingMs = System.currentTimeMillis();
@@ -120,36 +119,40 @@ public final class WebhookNotifier {
      * never come.</p>
      */
     public void tick() {
-        if (firstPendingMs == 0L) {
+        if (firstPendingMs == 0L || AlertSchedule.exhausted(sentThisSession)) {
             return;
         }
         long now = System.currentTimeMillis();
-        if (now - firstPendingMs < WINDOW_MS) {
-            return;
-        }
-        if (sentThisSession >= MAX_MESSAGES) {
-            clearPending();
+        if (!AlertSchedule.due(sentThisSession, lastEventTime(), now)) {
             return;
         }
         String body = buildMessage(now);
-        clearPending();
         if (body != null) {
             sentThisSession++;
+            lastSentMs = now;
             post(body);
         }
     }
 
-    /** Resets the per-session message budget. Called when a recording starts. */
-    public void resetBudget() {
-        sentThisSession = 0;
+    /** The clock the next alert is measured from: the first flag, then each send. */
+    private long lastEventTime() {
+        return sentThisSession == 0 ? firstPendingMs : lastSentMs;
     }
 
-    private void clearPending() {
-        pendingHotbar = 0;
-        pendingUse = 0;
-        pendingAttack = 0;
-        pendingKeybind = 0;
+    /**
+     * Starts a fresh session: new budget, new totals, new clock.
+     *
+     * <p>Called when a recording starts. Without clearing the totals a follow-up in
+     * a later session would report counts from an earlier one.</p>
+     */
+    public void resetBudget() {
+        sentThisSession = 0;
+        totalHotbar = 0;
+        totalUse = 0;
+        totalAttack = 0;
+        totalKeybind = 0;
         firstPendingMs = 0L;
+        lastSentMs = 0L;
     }
 
     // ── Message ──────────────────────────────────────────────────────────────
@@ -166,7 +169,7 @@ public final class WebhookNotifier {
                 describeServer(mc),
                 // ISO-8601, so Discord renders it in each reader's own timezone.
                 Instant.ofEpochMilli(now).toString(),
-                pendingHotbar, pendingUse, pendingAttack, pendingKeybind,
+                totalHotbar, totalUse, totalAttack, totalKeybind,
                 SessionRecorder.get().isRecording(),
                 SessionRecorder.get().lastShareLink(),
                 OpponentTracker.get().recent());
