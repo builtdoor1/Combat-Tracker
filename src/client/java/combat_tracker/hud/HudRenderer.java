@@ -2,7 +2,6 @@ package combat_tracker.hud;
 
 import combat_tracker.config.CtConfig;
 import combat_tracker.detection.ComboTracker;
-import combat_tracker.detection.IntegrityMonitor;
 import combat_tracker.record.SessionRecorder;
 import combat_tracker.stats.ComboStatsTracker;
 import combat_tracker.stats.StatsTracker;
@@ -154,14 +153,10 @@ public class HudRenderer {
             lines.add(new Line(String.format("Variance %.0fms", variance), varColor));
         }
 
-        // Only shown once something has actually tripped. A permanent "Flags 0" is
-        // noise on the overwhelming majority of sessions, and a line that appears is
-        // far more noticeable than a zero that changes.
-        IntegrityMonitor im = IntegrityMonitor.get();
-        if (im.totalFlags() > 0) {
-            lines.add(new Line(String.format("Unattributed  H%d U%d A%d K%d",
-                    im.hotbarFlags(), im.useFlags(), im.attackFlags(), im.keybindFlags()), 0xFFFF5555));
-        }
+        // The input-provenance counts are deliberately not shown here. Telling a
+        // player in real time which of their actions were flagged tells a cheat
+        // exactly which of its behaviours to stop, and the counts are kept in full
+        // in the report and the share link where they are actually read.
         return lines;
     }
 

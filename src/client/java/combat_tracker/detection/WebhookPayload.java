@@ -83,6 +83,22 @@ public final class WebhookPayload {
             f.append(",").append(field("Last session", "[open report](" + safe(shareLink) + ")", true));
         }
         f.append("]}]");
+
+        // The same facts again, structured, for the relay to file under this player
+        // so `/search` can find them later. Parsing them back out of the rendered
+        // embed would work until someone reworded a label. The relay strips this
+        // before forwarding — Discord would reject an unknown top-level field.
+        f.append(",\"meta\":{");
+        f.append("\"player\":").append(jsonString(safePlayer));
+        f.append(",\"uuid\":").append(jsonString(safeUuid));
+        f.append(",\"server\":").append(jsonString(safe(server)));
+        f.append(",\"opponent\":").append(jsonString(opponent == null ? "" : safe(opponent)));
+        f.append(",\"hotbar\":").append(Math.max(0, hotbar));
+        f.append(",\"use\":").append(Math.max(0, use));
+        f.append(",\"attack\":").append(Math.max(0, attack));
+        f.append(",\"keybind\":").append(Math.max(0, keybind));
+        f.append("}");
+
         f.append(",\"allowed_mentions\":{\"parse\":[]}}");
         return f.toString();
     }

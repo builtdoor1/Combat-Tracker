@@ -16,6 +16,7 @@
  */
 // The Durable Object class has to be exported from the entrypoint Cloudflare loads.
 export { AlertAggregator } from './aggregator.js';
+import { verifySignature, handleInteraction } from './interactions.js';
 
 /**
  * Pulls the player and per-check counts out of the embed the mod sent, for the
@@ -26,6 +27,19 @@ export { AlertAggregator } from './aggregator.js';
 function describe(embed) {
   const player = embed && embed.author && typeof embed.author.name === 'string'
       ? embed.author.name.slice(0, 80) : 'unknown';
+
+  // The UUID is in the Player field as the second backticked value. Worth digging
+  // out rather than leaving blank: a row stored without one can only ever be found
+  // by name, so `/search <uuid>` silently misses it — which looks exactly like the
+  // player having no history at all.
+  let uuid = '';
+  const idField = embed && Array.isArray(embed.fields)
+      ? embed.fields.find(f => f.name === 'Player') : null;
+  if (idField && typeof idField.value === 'string') {
+    const ticks = idField.value.match(/`([^`]+)`/g);
+    if (ticks && ticks.length >= 2) uuid = ticks[1].replace(/`/g, '').slice(0, 64);
+  }
+
   const counts = { hotbar: 0, use: 0, attack: 0, keybind: 0 };
   const field = embed && Array.isArray(embed.fields)
       ? embed.fields.find(f => f.name === 'What tripped') : null;
@@ -46,7 +60,7 @@ function describe(embed) {
       if (digits) counts[key] = parseInt(digits[0], 10) || 0;
     }
   }
-  return { player, counts };
+  return { player, uuid, counts };
 }
 
 /** Only the head-render service may supply images, and only over https. */
@@ -60,6 +74,39 @@ export default {
   async fetch(request, env) {
     if (request.method !== 'POST') {
       return new Response(null, { status: 405 });
+    }
+
+    // Discord interactions arrive on their own path so they are never confused with
+    // an alert from the mod. Signature-verified before the body is examined: this is
+    // a public URL, and without that check anyone could POST a forged interaction
+    // and read back any player's history.
+    if (new URL(request.url).pathname === '/interactions') {
+      const raw = await request.text();
+      const ok = await verifySignature(
+          raw,
+          request.headers.get('x-signature-ed25519'),
+          request.headers.get('x-signature-timestamp'),
+          env.DISCORD_PUBLIC_KEY);
+      if (!ok) {
+        // Discord requires exactly 401 here, and validates that this rejects a bad
+        // signature before it will accept the endpoint at all.
+        return new Response('invalid request signature', { status: 401 });
+      }
+      let interaction;
+      try {
+        interaction = JSON.parse(raw);
+      } catch {
+        return new Response(null, { status: 400 });
+      }
+      const reply = await handleInteraction(interaction, async (q) => {
+        if (!env.AGGREGATOR) return null;
+        const stub = env.AGGREGATOR.get(env.AGGREGATOR.idFromName('global'));
+        const res = await stub.fetch('https://aggregator/search?q=' + encodeURIComponent(q));
+        return res.ok ? await res.json() : null;
+      });
+      return new Response(JSON.stringify(reply), {
+        headers: { 'content-type': 'application/json' },
+      });
     }
 
     // Refuse a flood before doing any work for it. Keyed on the caller's address so
@@ -175,13 +222,13 @@ export default {
       return new Response(null, { status: direct.ok ? 204 : 502 });
     }
 
-    const { player, counts } = describe(out.embeds && out.embeds[0]);
+    const { player, uuid, counts } = describe(out.embeds && out.embeds[0]);
     const id = env.AGGREGATOR.idFromName('global');
     const stub = env.AGGREGATOR.get(id);
     const r = await stub.fetch('https://aggregator/alert', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ payload: out, player, counts }),
+      body: JSON.stringify({ payload: out, player, uuid, counts, meta: body.meta || null }),
     });
     if (!r.ok) {
       console.error('aggregator returned', r.status);
