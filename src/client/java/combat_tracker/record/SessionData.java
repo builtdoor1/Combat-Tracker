@@ -72,14 +72,16 @@ public final class SessionData {
     // Actions that no vanilla input path asked for. See InputContext for how the
     // call graph makes this a clean test, and for the limits of it.
 
-    /** Hotbar changes with no keybind, scroll or server packet behind them. */
-    public int flagHotbar;
-    /** {@code startUseItem} calls from outside {@code handleKeybinds}. */
-    public int flagUse;
-    /** {@code startAttack} calls from outside {@code handleKeybinds}. */
-    public int flagAttack;
-    /** Keybind state changed with no physical key or mouse event behind it. */
-    public int flagKeybind;
+    // Marked transient so Gson leaves them out of the canonical JSON entirely. Zero
+    // values would still have printed the field names into every saved report, which
+    // announces the feature to anyone who opens one — and the report is a file the
+    // player being measured can read. They stay as fields because SharePayload's v4
+    // layout writes four counters and a series at the end, and that layout is a
+    // published contract; it now always writes zeros.
+    public transient int flagHotbar;
+    public transient int flagUse;
+    public transient int flagAttack;
+    public transient int flagKeybind;
 
     /** Names of everyone swung at, referenced by index from {@link SEvent#target}. */
     public List<String> opponents = new ArrayList<>();
@@ -87,7 +89,7 @@ public final class SessionData {
     public List<JEvent> jumpEvents = new ArrayList<>();
     public List<CEvent> comboEvents = new ArrayList<>();
     public List<SEvent> swingEvents = new ArrayList<>();
-    public List<FEvent> flagEvents = new ArrayList<>();
+    public transient List<FEvent> flagEvents = new ArrayList<>();
 
     /** One scored jump-reset attempt. */
     public static final class JEvent {

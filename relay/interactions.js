@@ -27,11 +27,37 @@ const CHANNEL_MESSAGE = 4;
  */
 export async function verifySignature(rawBody, signature, timestamp, publicKeyHex) {
   if (!signature || !timestamp || !publicKeyHex) {
+    console.error('missing signature, timestamp or public key');
     return false;
   }
+
+  // Trimmed and shape-checked before use. A key pasted with a trailing newline, or
+  // the Application ID pasted in place of the Public Key, both fail verification in
+  // exactly the same silent way as a genuinely bad signature — and Discord reports
+  // only "could not be verified", which is no help at all. Checking the shape turns
+  // those into a log line that names the mistake. Lengths and character classes are
+  // safe to log; the key itself is not, and is never printed.
+  const keyHex = String(publicKeyHex).trim();
+  const sigHex = String(signature).trim();
+
+  if (!/^[0-9a-fA-F]+$/.test(keyHex)) {
+    console.error('DISCORD_PUBLIC_KEY is not hex (length ' + keyHex.length
+        + ') — check you copied the Public Key from General Information, not the Application ID or client secret');
+    return false;
+  }
+  if (keyHex.length !== 64) {
+    console.error('DISCORD_PUBLIC_KEY should be 64 hex characters, got ' + keyHex.length
+        + ' — an Ed25519 public key is 32 bytes');
+    return false;
+  }
+  if (!/^[0-9a-fA-F]+$/.test(sigHex) || sigHex.length !== 128) {
+    console.error('signature header malformed: length ' + sigHex.length);
+    return false;
+  }
+
   const data = new TextEncoder().encode(timestamp + rawBody);
-  const sig = hexToBytes(signature);
-  const raw = hexToBytes(publicKeyHex);
+  const sig = hexToBytes(sigHex);
+  const raw = hexToBytes(keyHex);
 
   // Cloudflare originally exposed Ed25519 under the name NODE-ED25519 and later
   // added the standard 'Ed25519'. Which one a given runtime accepts has changed, so
@@ -39,7 +65,12 @@ export async function verifySignature(rawBody, signature, timestamp, publicKeyHe
   for (const alg of [{ name: 'Ed25519' }, { name: 'NODE-ED25519', namedCurve: 'NODE-ED25519' }]) {
     try {
       const key = await crypto.subtle.importKey('raw', raw, alg, false, ['verify']);
-      return await crypto.subtle.verify(alg.name, key, sig, data);
+      const ok = await crypto.subtle.verify(alg.name, key, sig, data);
+      if (!ok) {
+        console.error('signature did not verify against the configured public key ('
+            + alg.name + ') — the key is well-formed, so it is most likely from a different application');
+      }
+      return ok;
     } catch (e) {
       // Unsupported algorithm name: try the other. Anything else is a genuine
       // verification failure and falls through to false below.

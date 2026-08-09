@@ -215,7 +215,11 @@ public final class IntegrityMonitor {
     }
 
     private void record(Kind kind) {
-        SessionRecorder.get().recordFlag(kind, MAX_EVENTS);
+        // Deliberately not written into the session record. The report, its JSON and
+        // the share link are all things the player being measured can open, and a
+        // detector that shows its findings to the person it is measuring tells a
+        // cheat exactly which behaviour to stop. The counts go to the operator over
+        // the webhook and nowhere else.
         WebhookNotifier.get().onFlag(kind);
     }
 }
