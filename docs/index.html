@@ -5,71 +5,233 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Combat Tracker Session</title>
 <style>
+  /* Tokens. One scale for space, type, depth and motion, so a change is made in
+     one place rather than hunted through the file. Values are fluid: this page is
+     read on a phone in a Discord in-app browser as often as on a desktop. */
   :root{
-    --bg:#14161a; --panel:#1c2026; --panel-2:#161a20; --line:#2a2f37; --line-hi:#3d4550;
-    --text:#e8eaed; --muted:#8a93a0; --dim:#5f6772; --accent:#9fb3c8; --warn:#ffb454;
-    --ease:cubic-bezier(.22,.61,.36,1); --fast:140ms; --med:220ms;
-    --e1:0 1px 3px rgba(0,0,0,.30); --e2:0 6px 18px rgba(0,0,0,.38);
+    color-scheme: dark;
+
+    --bg:        #14161a;
+    --bg-elev:   #191d24;
+    --panel:     #1e232b;
+    --line:      #2a2f37;
+    --line-hi:   #3d4550;
+
+    --text:      #e8eaed;
+    --muted:     #9aa4b2;
+    /* Not dimmer than this. --dim carries the readout's resting hint — the line
+       that tells you click-to-read exists at all — and the old #6b7480 came to
+       3.6:1 on the panel, under the 4.5:1 WCAG AA floor for text this size. This
+       clears it on all three backgrounds and still reads as the quiet tier. */
+    --dim:       #828c99;
+
+    --accent:    #ffb454;
+    --hit:       #4caf50;
+    --miss:      #ef5350;
+    --combo:     #29b6f6;
+
+    /* Fluid type. The floor is what a phone gets; the ceiling stops headings
+       becoming billboards on a wide monitor. */
+    --t-xs:  clamp(0.72rem, 0.70rem + 0.10vw, 0.78rem);
+    --t-sm:  clamp(0.80rem, 0.77rem + 0.15vw, 0.88rem);
+    --t-base:clamp(0.90rem, 0.86rem + 0.20vw, 1.00rem);
+    --t-lg:  clamp(1.05rem, 0.98rem + 0.35vw, 1.25rem);
+    --t-xl:  clamp(1.35rem, 1.15rem + 1.00vw, 2.00rem);
+    --t-2xl: clamp(1.75rem, 1.40rem + 1.75vw, 2.75rem);
+
+    --s-1: clamp(0.25rem, 0.22rem + 0.15vw, 0.375rem);
+    --s-2: clamp(0.5rem,  0.45rem + 0.25vw, 0.75rem);
+    --s-3: clamp(0.75rem, 0.65rem + 0.5vw,  1.125rem);
+    --s-4: clamp(1rem,    0.85rem + 0.75vw, 1.5rem);
+    --s-6: clamp(1.5rem,  1.25rem + 1.25vw, 2.25rem);
+    --s-8: clamp(2rem,    1.6rem + 2vw,     3rem);
+
+    --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
+
+    --e1: 0 1px 2px rgba(0,0,0,.35);
+    --e2: 0 4px 14px rgba(0,0,0,.38);
+    --e3: 0 12px 32px rgba(0,0,0,.42);
+
+    --fast: 130ms; --med: 240ms;
+    --ease: cubic-bezier(.22,.61,.36,1);
   }
-  *{box-sizing:border-box;}
-  body{font-family:system-ui,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text);
-       margin:0;padding:clamp(16px,2.5vw,32px);-webkit-font-smoothing:antialiased;}
-  h1{font-size:clamp(19px,1.4vw + 14px,26px);margin:0 0 4px;letter-spacing:-.01em;}
-  h2{font-size:clamp(14px,.5vw + 12px,17px);margin:28px 0 8px;color:var(--accent);letter-spacing:.01em;}
-  .sub{color:var(--muted);font-size:13px;margin-bottom:12px;line-height:1.55;}
-  .who{display:flex;align-items:center;gap:14px;margin:14px 0 4px;flex-wrap:wrap;}
-  .who img{width:52px;height:52px;image-rendering:pixelated;border-radius:8px;background:var(--panel);
-           box-shadow:var(--e1);transition:transform var(--med) var(--ease);}
-  .who img:hover{transform:scale(1.06);}
-  .who .ign{font-size:clamp(20px,1vw + 16px,25px);font-weight:600;letter-spacing:-.01em;}
-  .vs{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px;flex-wrap:wrap;}
-  .vs img{width:24px;height:24px;image-rendering:pixelated;border-radius:5px;background:var(--panel);}
-  table{border-collapse:collapse;font-size:13px;margin:4px 0;}
-  td,th{border:1px solid var(--line);padding:5px 11px;text-align:left;}
-  th{background:var(--panel);color:var(--accent);font-weight:600;}
-  tr{transition:background var(--fast) var(--ease);} tr:hover td{background:#191d24;}
-  .cards{display:flex;flex-wrap:wrap;gap:12px;margin:10px 0;}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:11px 17px;
-        min-width:112px;box-shadow:var(--e1);
-        transition:transform var(--med) var(--ease),border-color var(--med) var(--ease),
-                   box-shadow var(--med) var(--ease);}
-  .card:hover{transform:translateY(-2px);border-color:var(--line-hi);box-shadow:var(--e2);}
-  .card .v{font-size:clamp(19px,1vw + 15px,23px);font-weight:600;letter-spacing:-.01em;}
-  .card .k{font-size:12px;color:var(--muted);margin-top:1px;}
-  .note{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:13px;
-        font-size:12px;line-height:1.6;color:var(--accent);}
-  .warn{color:var(--warn);}
-  .thin{color:var(--warn);font-size:12px;margin:4px 0 8px;}
-  svg.chart circle{cursor:pointer;transition:r var(--fast) var(--ease),stroke-width var(--fast) var(--ease);}
-  svg.chart circle:hover{stroke:#fff;stroke-width:1.5;r:4.5;}
-  svg.chart circle[data-sel]{stroke:#fff;stroke-width:2.5;r:5;}
-  svg.chart{box-shadow:var(--e1);transition:border-color var(--med) var(--ease),box-shadow var(--med) var(--ease);}
-  .chartwrap{margin-bottom:16px;}
-  .chartwrap:hover svg.chart{border-color:var(--line-hi);box-shadow:var(--e2);}
-  .readout{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:var(--dim);
-           padding:7px 2px 0;min-height:18px;transition:color var(--med) var(--ease);}
-  .readout.on{color:var(--text);animation:ctIn var(--med) var(--ease);}
-  @keyframes ctIn{from{opacity:0;transform:translateY(3px);} to{opacity:1;transform:none;}}
-  .reveal{opacity:0;transform:translateY(14px);
-          transition:opacity 460ms var(--ease),transform 460ms var(--ease);}
-  .reveal.shown{opacity:1;transform:none;}
-  #empty{max-width:640px;line-height:1.7;}
-  a{color:#29b6f6;text-decoration:none;border-bottom:1px solid transparent;
-    transition:border-color var(--fast) var(--ease);}
-  a:hover{border-bottom-color:#29b6f6;}
-  code{background:#0f1114;padding:2px 6px;border-radius:5px;font-size:12px;border:1px solid var(--line);}
-  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px;}
+
+  *{box-sizing:border-box; margin:0;}
+  html{ -webkit-text-size-adjust:100%; }
+  body{
+    font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+    background:
+      radial-gradient(1100px 560px at 50% -12%, rgba(64,80,110,.30), transparent 70%),
+      var(--bg);
+    color:var(--text);
+    font-size:var(--t-base);
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    padding:var(--s-4);
+  }
+  main{ max-width:1180px; margin-inline:auto; }
+
+  /* Header */
+  .hero{
+    display:flex; align-items:center; gap:var(--s-4); flex-wrap:wrap;
+    padding:var(--s-4); margin-bottom:var(--s-4);
+    background:linear-gradient(160deg, var(--panel), var(--bg-elev));
+    border:1px solid var(--line); border-radius:var(--r-lg); box-shadow:var(--e2);
+  }
+  .hero__avatar{
+    width:clamp(56px,10vw,76px); height:clamp(56px,10vw,76px); flex:none;
+    image-rendering:pixelated; border-radius:var(--r-md);
+    background:var(--bg-elev); box-shadow:var(--e1);
+  }
+  .hero__text{ min-width:0; flex:1 1 16rem; }
+  h1{ font-size:var(--t-2xl); line-height:1.15; letter-spacing:-.02em; font-weight:650;
+      overflow-wrap:anywhere; }
+  .hero__ign{ font-size:var(--t-lg); font-weight:600; color:var(--accent);
+              letter-spacing:-.01em; overflow-wrap:anywhere; }
+  .vs{ display:flex; align-items:center; gap:var(--s-2); flex-wrap:wrap;
+       color:var(--muted); font-size:var(--t-sm); margin-top:var(--s-2); }
+  .vs img{ width:22px; height:22px; image-rendering:pixelated; border-radius:5px;
+           background:var(--bg-elev); vertical-align:middle; }
+  .vs__label{ color:var(--dim); }
+
+  /* Facts as discrete chips rather than a run-on sentence. */
+  .meta{ display:flex; gap:var(--s-2); flex-wrap:wrap; margin-top:var(--s-3); }
+  .chip{
+    font-size:var(--t-xs); color:var(--muted); white-space:nowrap;
+    padding:.28em .7em; border:1px solid var(--line); border-radius:999px;
+    background:rgba(255,255,255,.03);
+    font-variant-numeric:tabular-nums;
+  }
+
+  /* Sections */
+  section{ margin-top:var(--s-8); }
+  h2{
+    font-size:var(--t-lg); font-weight:600; letter-spacing:-.01em;
+    display:flex; align-items:baseline; gap:var(--s-2); margin-bottom:var(--s-3);
+  }
+  h2::after{ content:""; flex:1; height:1px;
+             background:linear-gradient(90deg,var(--line),transparent); }
+  .sub{ color:var(--muted); font-size:var(--t-sm); margin-bottom:var(--s-3); }
+  .sub b{ color:var(--text); font-weight:600; }
+
+  /* Stat cards. auto-fit rather than flex-wrap, so cards share width evenly
+     instead of leaving one stranded on its own row. */
+  .cards{
+    display:grid; gap:var(--s-2); margin-bottom:var(--s-3);
+    grid-template-columns:repeat(auto-fit,minmax(clamp(6.5rem,18vw,8.5rem),1fr));
+  }
+  .card{
+    background:var(--bg-elev); border:1px solid var(--line);
+    border-radius:var(--r-md); padding:var(--s-3); box-shadow:var(--e1);
+    transition:transform var(--med) var(--ease), border-color var(--med) var(--ease),
+               box-shadow var(--med) var(--ease);
+  }
+  @media (hover:hover){
+    .card:hover{ transform:translateY(-2px); border-color:var(--line-hi); box-shadow:var(--e2); }
+  }
+  .card .v{
+    font-size:var(--t-xl); font-weight:650; letter-spacing:-.02em; line-height:1.1;
+    font-variant-numeric:tabular-nums;
+  }
+  .card .k{ font-size:var(--t-xs); color:var(--muted); margin-top:.15em; }
+
+  /* Charts */
+  .chartwrap{
+    margin-bottom:var(--s-4); padding:var(--s-2);
+    background:var(--bg-elev); border:1px solid var(--line);
+    border-radius:var(--r-lg); box-shadow:var(--e1);
+    transition:border-color var(--med) var(--ease), box-shadow var(--med) var(--ease);
+  }
+  @media (hover:hover){ .chartwrap:hover{ border-color:var(--line-hi); box-shadow:var(--e2); } }
+  /* No touch-action here. It used to be `none`, which suppresses the browser's own
+     panning — and pan/zoom binds mouse events only, so nothing ever replaced the
+     gesture it suppressed. On a phone that made the scroller below unreachable and
+     swallowed vertical page scrolling over every chart. The browser owns touch. */
+  svg.chart{ display:block; background:#161a20; border:1px solid var(--line);
+    border-radius:var(--r-md); cursor:grab; }
+  svg.chart circle{ cursor:pointer;
+    transition:r var(--fast) var(--ease), stroke-width var(--fast) var(--ease); }
+  svg.chart circle:hover{ stroke:#fff; stroke-width:1.5; r:4.5; }
+  svg.chart circle[data-sel]{ stroke:#fff; stroke-width:2.5; r:5; }
+
+  /* The readout is an aria-live region, so it must not collapse when empty or a
+     screen reader announces a layout jump instead of a value. */
+  .readout{
+    font-family:ui-monospace, "Cascadia Mono", Consolas, monospace;
+    font-size:var(--t-xs); color:var(--dim);
+    padding:var(--s-2) var(--s-1) var(--s-1); min-height:2.2em;
+    transition:color var(--med) var(--ease);
+  }
+  /* The value swap gets a short lift so a changed reading is noticeable — clicking
+     a second point otherwise just edits text in place, with nothing to catch the
+     eye. Matches the saved report, which kept this when the viewer lost it. */
+  .readout.on{ color:var(--text); animation:ctIn var(--med) var(--ease); }
+  @keyframes ctIn{ from{ opacity:0; transform:translateY(3px); } to{ opacity:1; transform:none; } }
+
+  .thin{
+    color:var(--accent); font-size:var(--t-xs); line-height:1.5;
+    margin-bottom:var(--s-3); padding:var(--s-2) var(--s-3);
+    border-left:2px solid var(--accent); border-radius:0 var(--r-sm) var(--r-sm) 0;
+    background:rgba(255,180,84,.07);
+  }
+
+  .note{
+    background:var(--bg-elev); border:1px solid var(--line); border-radius:var(--r-md);
+    padding:var(--s-4); font-size:var(--t-sm); line-height:1.65; color:var(--muted);
+  }
+  .note strong{ color:var(--text); font-weight:600; }
+  .warn{ color:var(--accent); font-weight:600; }
+
+  a{ color:var(--combo); text-decoration:none; border-bottom:1px solid transparent;
+     transition:border-color var(--fast) var(--ease); }
+  a:hover{ border-bottom-color:currentColor; }
+  code{ background:#0f1114; padding:.15em .45em; border-radius:5px;
+        font-size:.92em; border:1px solid var(--line);
+        font-family:ui-monospace, Consolas, monospace; }
+
+  /* No loading skeleton. One was written for the async decode, but the session
+     arrives in the URL rather than over the network, so the wait it covered is not
+     measurable and a skeleton would only flash. Styling a state nothing emits reads
+     as a state that exists. */
+  .msg{ max-width:62ch; line-height:1.7; color:var(--muted); }
+  .msg h1{ margin-bottom:var(--s-3); }
+
+  /* Motion and focus */
+  .reveal{ opacity:0; transform:translateY(12px);
+           transition:opacity 420ms var(--ease), transform 420ms var(--ease); }
+  .reveal.shown{ opacity:1; transform:none; }
+
+  :focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:6px; }
+
   @media (prefers-reduced-motion:reduce){
-    *{animation:none !important;transition:none !important;}
-    .reveal{opacity:1;}
+    *,*::before,*::after{ animation-duration:.01ms !important; animation-iteration-count:1 !important;
+                          transition-duration:.01ms !important; }
+    .reveal{ opacity:1; transform:none; }
+  }
+
+  /* Charts carry millisecond detail that does not survive being squeezed onto a
+     phone, so below this width they scroll sideways at a readable size instead.
+     The width is the charts' own design width, not a smaller round number: the
+     axis text is sized in user units, so anything less scales it down with
+     everything else. At 680px it came out at 4.9 CSS px — scrolling for labels
+     still too small to read, which is the worst of both. 1:1 is the whole point. */
+  @media (max-width:640px){
+    .chart-scroll{ overflow-x:auto; overscroll-behavior-x:contain; }
+    .chart-scroll svg.chart:not(.chart--fit){ min-width:1400px; }
   }
 </style>
 </head>
 <body>
-<div id="app"></div>
+<main id="app" aria-busy="true"></main>
 
 <script>
 const HIT = '#4caf50', MISS = '#ef5350', COMBO = '#29b6f6', ACCENT = '#ffb454';
+// Greys inside the charts. Named here because they were the last colours still
+// written inline at each use, and they had drifted below the contrast floor
+// unnoticed: on the #161a20 chart the tick labels sat at 3.7:1, the unit caption
+// at 2.3:1 and the empty-chart label at 3.1:1, against 4.5:1 for text. HITBOX is
+// a graphic rather than text, so it answers to the 3:1 floor instead.
+const AXIS_TX = '#828c99', NODATA = '#9aa4b2', HITBOX = '#6b7480';
 const VANILLA_REACH = 3.0, HB_W = 0.3, HB_H = 0.9;
 
 // ── Binary reader ──────────────────────────────────────────────────────────
@@ -199,15 +361,23 @@ function f2(v) { return Number(v).toFixed(2); }
 
 // maxW caps the scatter, which looks wrong stretched. Time-series charts fill
 // the page: the wider they are, the more millisecond detail is readable.
+// Inline style carries max-width only — the one value that genuinely varies per
+// chart. Everything else lives in the svg.chart rule, because an inline
+// declaration beats the stylesheet and this one was quietly winning: the report
+// moved its frame into CSS and the viewer kept painting the old one inline, so
+// the two surfaces had started drawing the same chart differently.
 function svgOpen(w, h, maxW) {
-  return `<svg class="chart" viewBox="0 0 ${w} ${h}" width="100%" style="${maxW ? `max-width:${maxW}px;` : ''}` +
-         `background:#161a20;border:1px solid #2a2f37;border-radius:8px;cursor:grab;touch-action:none;">`;
+  // A capped chart is also marked, because the mobile min-width that keeps the
+  // wide time-series readable would otherwise beat the cap — min-width wins over
+  // max-width — and inflate the squarish scatter to full height on a phone.
+  return `<svg class="chart${maxW ? ' chart--fit' : ''}" viewBox="0 0 ${w} ${h}" width="100%"` +
+         `${maxW ? ` style="max-width:${maxW}px;"` : ''}>`;
 }
 function chartTitle(text) {
   return `<text x="${ML}" y="18" fill="#9fb3c8" font-size="13" font-family="sans-serif">${esc(text)}</text>`;
 }
 function noData(w, h) {
-  return `<text x="${w / 2}" y="${h / 2}" fill="#5f6772" font-size="13" text-anchor="middle" ` +
+  return `<text x="${w / 2}" y="${h / 2}" fill="${NODATA}" font-size="13" text-anchor="middle" ` +
          `font-family="sans-serif">no data recorded</text></svg>`;
 }
 // Gridlines on round values, sized to the range. Milliseconds are the point of
@@ -229,11 +399,11 @@ function axes(yMin, yMax, unit) {
     if (yy < MT || yy > MT + PH) continue;
     const zero = Math.abs(val) < step * 0.001;
     s += `<line x1="${ML - 3}" y1="${yy}" x2="${ML + PW}" y2="${yy}" stroke="${zero ? '#3a424d' : '#21262e'}"/>` +
-         `<text x="${ML - 6}" y="${yy + 3}" fill="#6b7480" font-size="10" text-anchor="end" ` +
+         `<text x="${ML - 6}" y="${yy + 3}" fill="${AXIS_TX}" font-size="10" text-anchor="end" ` +
          `font-family="sans-serif">${label(val)}</text>`;
   }
   if (unit) {
-    s += `<text x="${ML - 6}" y="${MT - 8}" fill="#4a5561" font-size="9" text-anchor="end" ` +
+    s += `<text x="${ML - 6}" y="${MT - 8}" fill="${AXIS_TX}" font-size="9" text-anchor="end" ` +
          `font-family="sans-serif">${esc(unit)}</text>`;
   }
   return s;
@@ -292,7 +462,7 @@ function aimScatter(d) {
   const bw = HB_W * scale, bh = HB_H * scale;
 
   s += `<rect x="${(cx - bw).toFixed(1)}" y="${(cy - bh).toFixed(1)}" width="${(bw * 2).toFixed(1)}" ` +
-       `height="${(bh * 2).toFixed(1)}" fill="${HIT}" fill-opacity="0.06" stroke="#4a5561" stroke-width="1"/>`;
+       `height="${(bh * 2).toFixed(1)}" fill="${HIT}" fill-opacity="0.06" stroke="${HITBOX}" stroke-width="1"/>`;
   s += `<line x1="${cx.toFixed(1)}" y1="${mt}" x2="${cx.toFixed(1)}" y2="${mt + ph}" stroke="#2a2f37"/>`;
   s += `<line x1="${ml}" y1="${cy.toFixed(1)}" x2="${ml + pw}" y2="${cy.toFixed(1)}" stroke="#2a2f37"/>`;
 
@@ -301,7 +471,7 @@ function aimScatter(d) {
     s += dot(cx + e.offX * scale, cy - e.offY * scale, e.hit ? HIT : MISS,
              `${f2(e.offX)}, ${f2(e.offY)} blocks / ${f2(e.aimDeg)} deg${who}`);
   }
-  s += `<text x="${ml}" y="${h - 10}" fill="#6b7480" font-size="10" font-family="sans-serif">` +
+  s += `<text x="${ml}" y="${h - 10}" fill="${AXIS_TX}" font-size="10" font-family="sans-serif">` +
        `box = player hitbox to scale &#183; green landed, red whiffed</text>`;
   return s + '</svg>';
 }
@@ -309,85 +479,133 @@ function aimScatter(d) {
 // ── Page ───────────────────────────────────────────────────────────────────
 // Wraps a chart with the readout line that click-to-read writes into.
 const CHART_HINT = "Click anywhere on the chart for the nearest point's exact value.";
+
+/**
+ * A chart plus the readout that click-to-read writes into.
+ *
+ * The readout is an aria-live region: without it a click announces nothing and
+ * only sighted users get the feature. The inner scroller lets a 1400-wide chart
+ * keep a readable scale on a phone instead of being squashed to illegibility.
+ */
 function chartBlock(svg) {
-  return `<div class="chartwrap">${svg}<div class="readout" data-hint="${CHART_HINT}">${CHART_HINT}</div></div>`;
+  return `<div class="chartwrap"><div class="chart-scroll">${svg}</div>` +
+         `<div class="readout" role="status" aria-live="polite" ` +
+         `data-hint="${CHART_HINT}">${CHART_HINT}</div></div>`;
 }
 
 function card(v, k) { return `<div class="card"><div class="v">${v}</div><div class="k">${k}</div></div>`; }
 
+function cards(list) { return `<div class="cards">${list.join('')}</div>`; }
+
+/** A single fact, as a chip rather than one more clause in a sentence. */
+function chip(text) { return `<span class="chip">${text}</span>`; }
+
+/** One titled block. In one place so the sections cannot drift apart. */
+function section(title, inner) { return `<section><h2>${esc(title)}</h2>${inner}</section>`; }
+
 function thinNote(shown, total, what) {
   if (shown >= total) return '';
-  return `<div class="thin">Graph shows ${shown} of ${total} ${what}  the link carries an evenly spaced ` +
+  return `<div class="thin">Graph shows ${shown} of ${total} ${what} — the link carries an evenly spaced ` +
          `sample so it stays short enough to send. The figures above are computed over all ${total}.</div>`;
 }
 
-function head(nameOrUuid, size) {
-  return `<img src="https://mc-heads.net/avatar/${encodeURIComponent(nameOrUuid)}/${size}" alt="" ` +
+function head(nameOrUuid, size, cls) {
+  return `<img class="${cls || ''}" src="https://mc-heads.net/avatar/${encodeURIComponent(nameOrUuid)}/${size}" ` +
+         `alt="" width="${size}" height="${size}" loading="lazy" ` +
          `onerror="this.style.visibility='hidden'">`;
 }
 
 function render(d) {
   const dur = Math.max(0, Math.floor(d.durationMs / 1000));
   const started = new Date(d.startEpochMs).toISOString().replace('T', ' ').replace(/\..+/, ' UTC');
-
-  let h = `<h1>${d.title ? esc(d.title) : 'Combat Tracker Session Report'}</h1>`;
   if (d.title) document.title = d.title + ' - Combat Tracker';
-  h += `<div class="who">${head(d.playerUuid || d.player, 48)}<span class="ign">${esc(d.player)}</span></div>`;
-  if (d.opponents.length) {
-    h += `<div class="vs">vs ${d.opponents.map(o => head(o, 24) + ' ' + esc(o)).join(' &nbsp; ')}</div>`;
-  }
-  h += `<div class="sub">${esc(started)} &middot; ${Math.floor(dur / 60)}m ${dur % 60}s` +
-       (d.pingMs != null ? ` &middot; ${Math.round(d.pingMs)} ms ping` : '') +
-       ` &middot; charts: <b>click a point for its exact value</b>, scroll to zoom, drag to pan, ` +
-       `double-click to reset.</div>`;
 
-  h += `<h2>Jump resets</h2><div class="cards">` +
-       card(d.jumpAttempts, 'attempts') + card(d.jumpHits, 'hits') +
-       card(d.jumpAttempts - d.jumpHits, 'misses') +
-       card(f2(d.jumpAvgMs) + ' ms', 'avg delta') + card(f2(d.jumpSdMs) + ' ms', 'std dev') + `</div>`;
-  h += thinNote(d.jumps.length, d.jumpTotal, 'attempts');
-  h += chartBlock(seriesChart('Jump-reset delta over time (ms)', d.jumps, d, {
-    value: p => p.delta, color: p => p.code === 0 ? HIT : MISS, unit: 'ms',
-    tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${p.delta} ms (${['SUCCESS', 'TOO_EARLY', 'TOO_LATE'][p.code]})`,
-  }));
+  // Identity first and largest. The question a reader opens this page with is
+  // "whose fight is this", and that used to be answered by a line of body text.
+  let h = `<header class="hero">` +
+      head(d.playerUuid || d.player, 76, 'hero__avatar') +
+      `<div class="hero__text">` +
+        `<h1>${d.title ? esc(d.title) : 'Combat Tracker session'}</h1>` +
+        `<div class="hero__ign">${esc(d.player)}</div>` +
+        (d.opponents.length
+          ? `<div class="vs"><span class="vs__label">vs</span>` +
+            d.opponents.map(o => `<span>${head(o, 22)} ${esc(o)}</span>`).join('') + `</div>`
+          : '') +
+        `<div class="meta">` +
+          chip(esc(started)) +
+          chip(`${Math.floor(dur / 60)}m ${dur % 60}s`) +
+          (d.pingMs != null ? chip(`${Math.round(d.pingMs)} ms ping`) : '') +
+        `</div>` +
+      `</div></header>`;
 
-  h += `<h2>Combo timing</h2><div class="cards">` +
-       card(d.combos, 'combos') + card(d.comboIntervals, 'intervals') +
-       card(f2(d.comboAvgMs) + ' ms', 'avg interval') + card(f2(d.comboJitterMs) + ' ms', 'jitter (SD)') + `</div>`;
-  h += thinNote(d.comboList.length, d.comboTotal, 'intervals');
-  h += chartBlock(seriesChart('Combo inter-hit interval over time (ms)', d.comboList, d, {
-    value: p => p.interval, color: () => COMBO, lineColor: COMBO, unit: 'ms',
-    tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${p.interval} ms`,
-  }));
+  h += `<p class="sub">Charts: <b>click a point for its exact value</b>, scroll to zoom, ` +
+       `drag to pan, double-click to reset.</p>`;
 
-  h += `<h2>Reach</h2><div class="cards">` +
-       card(d.swings, 'swings') + card(d.swingHits, 'landed') + card(d.swings - d.swingHits, 'whiffed') +
-       card(f2(d.reachAvg) + ' b', 'avg reach') + card(f2(d.reachMax) + ' b', 'max reach') +
-       card(f2(d.reachSd) + ' b', 'std dev') + `</div>`;
-  h += `<div class="sub">Green landed, red whiffed. Dashed line is vanilla melee range.</div>`;
-  h += thinNote(d.swingList.length, d.swingTotal, 'swings');
-  h += chartBlock(seriesChart('Reach per swing (blocks)', d.swingList, d, {
-    value: p => p.reach, color: p => p.hit ? HIT : MISS, line: false, unit: 'blocks',
-    baseMax: VANILLA_REACH, refLine: VANILLA_REACH, refLabel: 'vanilla 3.0',
-    tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${f2(p.reach)} blocks ${p.hit ? '(landed)' : '(whiffed)'}` +
-                    (p.target >= 0 && dd.opponents[p.target] ? ' vs ' + dd.opponents[p.target] : ''),
-  }));
+  h += section('Jump resets',
+    cards([
+      card(d.jumpAttempts, 'attempts'),
+      card(d.jumpHits, 'hits'),
+      card(d.jumpAttempts - d.jumpHits, 'misses'),
+      card(f2(d.jumpAvgMs) + ' ms', 'avg delta'),
+      card(f2(d.jumpSdMs) + ' ms', 'std dev'),
+    ]) +
+    thinNote(d.jumps.length, d.jumpTotal, 'attempts') +
+    chartBlock(seriesChart('Jump-reset delta over time (ms)', d.jumps, d, {
+      value: p => p.delta, color: p => p.code === 0 ? HIT : MISS, unit: 'ms',
+      tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${p.delta} ms (${['SUCCESS', 'TOO_EARLY', 'TOO_LATE'][p.code]})`,
+    })));
 
-  h += `<h2>Aim placement</h2><div class="cards">` +
-       card(f2(d.aimAvg) + '&deg;', 'avg off-centre') + card(f2(d.aimSd) + '&deg;', 'std dev') + `</div>`;
-  h += `<div class="sub">Hitbox drawn to scale. Green landed, red whiffed.</div>`;
-  h += chartBlock(aimScatter(d));
+  h += section('Combo timing',
+    cards([
+      card(d.combos, 'combos'),
+      card(d.comboIntervals, 'intervals'),
+      card(f2(d.comboAvgMs) + ' ms', 'avg interval'),
+      card(f2(d.comboJitterMs) + ' ms', 'jitter (SD)'),
+    ]) +
+    thinNote(d.comboList.length, d.comboTotal, 'intervals') +
+    chartBlock(seriesChart('Combo inter-hit interval over time (ms)', d.comboList, d, {
+      value: p => p.interval, color: () => COMBO, lineColor: COMBO, unit: 'ms',
+      tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${p.interval} ms`,
+    })));
 
-  h += `<h2>About</h2><div class="note">Generated by ` +
-       `<a href="https://github.com/builtdoor1/Combat-Tracker" style="color:#29b6f6">Combat Tracker</a>, a ` +
-       `client-side Minecraft mod that only observes. It never changes movement, reach or aim.` +
-       `<br><br><span class="warn">Read honestly:</span> the session travels inside this link, so nothing was ` +
-       `uploaded and nothing verified it. This page carries no signature to check — it renders what the link ` +
-       `says, including the name and skin above, which are just text in the payload. Anyone can write one of ` +
-       `these links from scratch in minutes, in any name, with no mod and no recompile. Reach and aim are ` +
-       `measured on the player's own client. Treat it as a record of a fight, not proof.</div>`;
+  h += section('Reach',
+    cards([
+      card(d.swings, 'swings'),
+      card(d.swingHits, 'landed'),
+      card(d.swings - d.swingHits, 'whiffed'),
+      card(f2(d.reachAvg) + ' b', 'avg reach'),
+      card(f2(d.reachMax) + ' b', 'max reach'),
+      card(f2(d.reachSd) + ' b', 'std dev'),
+    ]) +
+    `<p class="sub">Green landed, red whiffed. Dashed line is vanilla melee range.</p>` +
+    thinNote(d.swingList.length, d.swingTotal, 'swings') +
+    chartBlock(seriesChart('Reach per swing (blocks)', d.swingList, d, {
+      value: p => p.reach, color: p => p.hit ? HIT : MISS, line: false, unit: 'blocks',
+      baseMax: VANILLA_REACH, refLine: VANILLA_REACH, refLabel: 'vanilla 3.0',
+      tip: (p, dd) => `${tOff(p.t - dd.startEpochMs)} : ${f2(p.reach)} blocks ${p.hit ? '(landed)' : '(whiffed)'}` +
+                      (p.target >= 0 && dd.opponents[p.target] ? ' vs ' + dd.opponents[p.target] : ''),
+    })));
 
-  document.getElementById('app').innerHTML = h;
+  h += section('Aim placement',
+    cards([
+      card(f2(d.aimAvg) + '&deg;', 'avg off-centre'),
+      card(f2(d.aimSd) + '&deg;', 'std dev'),
+    ]) +
+    `<p class="sub">Hitbox drawn to scale. Green landed, red whiffed.</p>` +
+    chartBlock(aimScatter(d)));
+
+  h += section('About', `<div class="note">Generated by ` +
+    `<a href="https://github.com/builtdoor1/Combat-Tracker">Combat Tracker</a>, a ` +
+    `client-side Minecraft mod that only observes. It never changes movement, reach or aim.` +
+    `<br><br><span class="warn">Read honestly:</span> the session travels inside this link, so nothing was ` +
+    `uploaded and nothing verified it. This page carries no signature to check — it renders what the link ` +
+    `says, including the name and skin above, which are just text in the payload. Anyone can write one of ` +
+    `these links from scratch in minutes, in any name, with no mod and no recompile. Reach and aim are ` +
+    `measured on the player's own client. Treat it as a record of a fight, not proof.</div>`);
+
+  const app = document.getElementById('app');
+  app.innerHTML = h;
+  app.setAttribute('aria-busy', 'false');
   attachPanZoom();
   revealOnScroll();
 }
@@ -402,7 +620,9 @@ function render(d) {
 // Sections fade up once as they enter the viewport. Cheap, and it gives a long
 // report a sense of order rather than dumping everything at once.
 function revealOnScroll() {
-  const targets = [...document.querySelectorAll('h2,.cards,.chartwrap,.who,.vs,.note,.thin')];
+  // .hero, not the .who it replaced — that class stopped being emitted in the
+  // redesign and the selector had been quietly matching nothing since.
+  const targets = [...document.querySelectorAll('h2,.cards,.chartwrap,.hero,.note,.thin')];
   const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion:reduce)').matches;
   const show = el => el.classList.add('shown');
 
@@ -441,7 +661,11 @@ function attachPanZoom() {
     let v = { x: vb[0], y: vb[1], w: vb[2], h: vb[3] };
     const ap = () => svg.setAttribute('viewBox', v.x + ' ' + v.y + ' ' + v.w + ' ' + v.h);
 
-    const out = svg.parentNode.querySelector('.readout');
+    // Found from the .chartwrap, not the immediate parent. The chart sits inside a
+    // scroller so it can keep a readable width on a phone, which puts a div between
+    // the svg and its readout — parentNode looked right and silently returned null,
+    // leaving the click-to-read value with nowhere to print.
+    const out = svg.closest('.chartwrap').querySelector('.readout');
     let sel = null;
     function clearSel() {
       if (sel) { sel.removeAttribute('data-sel'); sel = null; }
@@ -521,15 +745,23 @@ function attachPanZoom() {
 }
 
 function showMessage(title, body) {
-  document.getElementById('app').innerHTML =
-    `<h1>${esc(title)}</h1><div class="sub" id="empty">${body}</div>`;
+  const app = document.getElementById('app');
+  // .msg, not the old #empty: the redesign's stylesheet is what gives this its
+  // reading measure and heading gap, and emitting the pre-redesign class name left
+  // all three non-chart states — empty, unsupported, corrupt link — running full
+  // page width with no styling of their own.
+  app.innerHTML = `<div class="msg"><h1>${esc(title)}</h1><p>${body}</p></div>`;
+  // Every exit from boot() lands here, so this is where busy has to be lifted.
+  // Clearing it only in render() left the empty, unsupported and corrupt-link
+  // states announcing themselves as still loading, forever.
+  app.setAttribute('aria-busy', 'false');
 }
 
 async function boot() {
   const frag = location.hash.replace(/^#/, '').trim();
   if (!frag) {
     showMessage('Combat Tracker', 'This page renders a Combat Tracker session that is carried entirely inside ' +
-      'the link  there is no server and nothing is stored here. Open a session link to view it, or grab ' +
+      'the link &mdash; there is no server and nothing is stored here. Open a session link to view it, or grab ' +
       'the mod from <a href="https://github.com/builtdoor1/Combat-Tracker" style="color:#29b6f6">GitHub</a> and ' +
       'record your own with <code>Stop Recording</code>.');
     return;
@@ -542,7 +774,7 @@ async function boot() {
   try {
     render(decode(await inflateRaw(b64urlToBytes(frag))));
   } catch (err) {
-    showMessage('Could not read this link', 'The session data appears truncated or corrupted  chat clients ' +
+    showMessage('Could not read this link', 'The session data appears truncated or corrupted &mdash; chat clients ' +
       'sometimes cut long links in half. Ask for it again as a full copy-paste.<br><br><code>' +
       esc(err && err.message ? err.message : String(err)) + '</code>');
   }

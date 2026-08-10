@@ -141,7 +141,7 @@ public final class ReportPreview {
     }
 
     /** Builds a plausible human session: spread timings, scattered aim, sane reach. */
-    static String fmt(double v) { return String.format("%.2f", v); }
+    static String fmt(double v) { return String.format(java.util.Locale.ROOT, "%.2f", v); }
 
     /** @param jumpSpreadMs standard deviation of the jump-reset timings. */
     static SessionData synthesise(int events, long seed, double jumpSpreadMs) {

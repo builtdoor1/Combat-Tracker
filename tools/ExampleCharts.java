@@ -21,7 +21,9 @@ public class ExampleCharts {
     static final Color PANEL   = new Color(0x161a20);
     static final Color LINE    = new Color(0x2a2f37);
     static final Color GRID    = new Color(0x21262e);
-    static final Color AXIS_TX = new Color(0x6b7480);
+    // Matches the report's AXIS_TX. Held at the 4.5:1 contrast floor on the chart
+    // background; the older grey came to 3.7:1.
+    static final Color AXIS_TX = new Color(0x828c99);
     static final Color TITLE   = new Color(0x9fb3c8);
     static final Color MUTED   = new Color(0x8a93a0);
     static final Color HIT     = new Color(0x4caf50);
@@ -151,7 +153,7 @@ public class ExampleCharts {
                     Shape box = new Rectangle2D.Double(cx - bw, cy - bh, bw * 2, bh * 2);
                     g.setColor(new Color(HIT.getRed(), HIT.getGreen(), HIT.getBlue(), 16));
                     g.fill(box);
-                    g.setColor(new Color(0x4a5561));
+                    g.setColor(new Color(0x6b7480));  // hitbox outline: a graphic, 3:1 floor
                     g.setStroke(new BasicStroke(1.4f));
                     g.draw(box);
 
@@ -234,7 +236,7 @@ public class ExampleCharts {
         g.setColor(LINE);
         g.draw(new Line2D.Double(x0, y1, x0, y0));
         g.draw(new Line2D.Double(x0, y0, x1, y0));
-        g.setColor(new Color(0x4a5561));
+        g.setColor(AXIS_TX);  // unit caption is text, so it takes the text floor
         g.drawString(unit, x0 - 40, y1 - 2);
     }
 
