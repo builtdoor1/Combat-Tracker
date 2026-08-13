@@ -1,7 +1,18 @@
 plugins {
-	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}"
+	id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
+	id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
 	id 'maven-publish'
 }
+
+// From 26.x Mojang ships the client already deobfuscated, so there is nothing to
+// remap and no mappings to apply — the upstream fabric-example-mod 26.2 branch
+// drops the mappings dependency and swaps to the plain loom plugin. 1.21.x still
+// needs both. Detected on the version scheme: 1.x is the old line, 26.x the
+// year-based one.
+def deobfuscatedMinecraft = project.minecraft_version.toString() ==~ /^\d{2}\..*/
+def javaRelease = deobfuscatedMinecraft ? 25 : 21
+
+apply plugin: deobfuscatedMinecraft ? 'net.fabricmc.fabric-loom' : 'net.fabricmc.fabric-loom-remap'
 
 version = project.mod_version
 group = project.maven_group
@@ -133,18 +144,26 @@ tasks.matching { it.name in ['processClientResources', 'sourcesJar', 'clientSour
 dependencies {
 	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
-	mappings loom.officialMojangMappings()
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+	if (!deobfuscatedMinecraft) {
+		mappings loom.officialMojangMappings()
+	}
+
+	// From 26.x the game is not obfuscated, so mod dependencies need no remapping
+	// and the modImplementation configuration does not exist — the plain loom
+	// plugin takes them as ordinary implementation dependencies.
+	def modDep = deobfuscatedMinecraft ? 'implementation' : 'modImplementation'
+
+	add(modDep, "net.fabricmc:fabric-loader:${project.loader_version}")
 
 	// Fabric API. This is technically optional, but you probably want it anyway.
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}"
+	add(modDep, "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}")
 
 	// Mod Menu - provides the in-game config screen entry.
-	modImplementation "com.terraformersmc:modmenu:${project.modmenu_version}"
+	add(modDep, "com.terraformersmc:modmenu:${project.modmenu_version}")
 
 	// Cloth Config: builds the actual settings screen (sliders, dropdowns, toggles).
 	// Exclude its bundled Fabric API so it doesn't clash with the version above.
-	modImplementation("me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}") {
+	add(modDep, "me.shedaniel.cloth:cloth-config-fabric:${project.cloth_config_version}") {
 		exclude(group: "net.fabricmc.fabric-api")
 	}
 }
@@ -167,7 +186,7 @@ processResources {
 }
 
 tasks.withType(JavaCompile).configureEach {
-	it.options.release = 21
+	it.options.release = javaRelease
 }
 
 // Renders a synthetic session report + share link without launching the game.
@@ -188,8 +207,9 @@ java {
 	// If you remove this line, sources will not be generated.
 	withSourcesJar()
 
-	sourceCompatibility = JavaVersion.VERSION_21
-	targetCompatibility = JavaVersion.VERSION_21
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(javaRelease)
+	}
 }
 
 jar {

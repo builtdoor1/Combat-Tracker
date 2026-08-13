@@ -9,5 +9,11 @@ pluginManagement {
 	}
 }
 
+plugins {
+	// 26.x is compiled for Java 25. This lets Gradle download a matching JDK into
+	// its own cache instead of requiring one installed system-wide.
+	id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
 // Should match your modid
 rootProject.name = 'combat-tracker'
