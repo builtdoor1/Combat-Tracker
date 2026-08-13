@@ -57,6 +57,30 @@ public final class AlertSchedule {
      * @param now       current time
      */
     public static boolean due(int sent, long since, long now) {
-        return !exhausted(sent) && now - since >= dueAfter(sent);
+        return due(sent, since, now, false);
+    }
+
+    /**
+     * Whether an alert is due now, given whether anything new is waiting.
+     *
+     * <p>The budget exists to stop one bad session flooding a channel with the same
+     * information over and over. It was doing more than that: once spent it stayed
+     * spent for the rest of the game, so a check that tripped for the <em>first
+     * time</em> an hour later was counted, folded into the totals, and never sent.
+     * A player whose keybind noise used the budget early would then see nothing at
+     * all when a hotbar switch was detected, which reads exactly like the detector
+     * having stopped working.</p>
+     *
+     * <p>So a kind nobody has been told about yet is always worth one message. It is
+     * still spaced by {@link #FIRST_DELAY_MS}, and it is still bounded — there are
+     * only four kinds — so this cannot become a flood.</p>
+     *
+     * @param newInformation a check has tripped that no earlier alert described
+     */
+    public static boolean due(int sent, long since, long now, boolean newInformation) {
+        if (exhausted(sent)) {
+            return newInformation && now - since >= FIRST_DELAY_MS;
+        }
+        return now - since >= dueAfter(sent);
     }
 }

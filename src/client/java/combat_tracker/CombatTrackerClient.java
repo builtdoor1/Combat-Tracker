@@ -103,6 +103,11 @@ public class CombatTrackerClient implements ClientModInitializer {
             // Disconnected or in a menu with no world: drop any click that never
             // became an attack, so it can't pair with a swing after reconnecting.
             ClickTimestamps.clear();
+            // Leaving a world ends the alert session too. The budget used to reset
+            // only when a recording started, so a player who never recorded carried
+            // one three-message budget for as long as the game stayed open — and
+            // once it was spent, every later detection was counted and discarded.
+            WebhookNotifier.get().resetBudget();
         }
         if (player != null && client.level != null) {
             tracker.tick(client);

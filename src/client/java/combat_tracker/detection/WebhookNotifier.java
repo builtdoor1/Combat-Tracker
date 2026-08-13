@@ -14,6 +14,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.EnumSet;
 
 /**
  * Posts a Discord message when input-provenance checks trip.
@@ -92,6 +93,16 @@ public final class WebhookNotifier {
     private long lastSentMs;
     private int sentThisSession;
 
+    /**
+     * Kinds waiting to be described, and kinds already described.
+     *
+     * <p>The difference is what makes an alert worth sending past the budget: a check
+     * that has tripped but has never been reported is information the operator does
+     * not have yet, and swallowing it is indistinguishable from not detecting it.</p>
+     */
+    private final EnumSet<IntegrityMonitor.Kind> pending = EnumSet.noneOf(IntegrityMonitor.Kind.class);
+    private final EnumSet<IntegrityMonitor.Kind> reported = EnumSet.noneOf(IntegrityMonitor.Kind.class);
+
     private WebhookNotifier() {
     }
 
@@ -106,6 +117,7 @@ public final class WebhookNotifier {
             case ATTACK -> totalAttack++;
             case KEYBIND -> totalKeybind++;
         }
+        pending.add(kind);
         if (firstPendingMs == 0L) {
             firstPendingMs = System.currentTimeMillis();
         }
@@ -119,17 +131,20 @@ public final class WebhookNotifier {
      * never come.</p>
      */
     public void tick() {
-        if (firstPendingMs == 0L || AlertSchedule.exhausted(sentThisSession)) {
+        if (firstPendingMs == 0L) {
             return;
         }
         long now = System.currentTimeMillis();
-        if (!AlertSchedule.due(sentThisSession, lastEventTime(), now)) {
+        boolean newInformation = !reported.containsAll(pending);
+        if (!AlertSchedule.due(sentThisSession, lastEventTime(), now, newInformation)) {
             return;
         }
         String body = buildMessage(now);
         if (body != null) {
             sentThisSession++;
             lastSentMs = now;
+            reported.addAll(pending);
+            pending.clear();
             post(body);
         }
     }
@@ -142,11 +157,14 @@ public final class WebhookNotifier {
     /**
      * Starts a fresh session: new budget, new totals, new clock.
      *
-     * <p>Called when a recording starts. Without clearing the totals a follow-up in
-     * a later session would report counts from an earlier one.</p>
+     * <p>Called when a recording starts and when the player leaves a world. It used
+     * to be only the former, which meant a player who never recorded carried one
+     * budget for the whole time the game was open.</p>
      */
     public void resetBudget() {
         sentThisSession = 0;
+        pending.clear();
+        reported.clear();
         totalHotbar = 0;
         totalUse = 0;
         totalAttack = 0;

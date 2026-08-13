@@ -208,6 +208,15 @@ tasks.withType(JavaCompile).configureEach {
 	it.options.release = javaRelease
 }
 
+// Exercises the hotbar provenance logic without launching the game. This area has
+// been wrong three times; it should be run, not reasoned about.
+tasks.register('provenanceSelfTest', JavaExec) {
+	group = 'verification'
+	description = 'Check that software hotbar switches are still reported'
+	classpath = sourceSets.client.runtimeClasspath
+	mainClass = 'combat_tracker.detection.ProvenanceSelfTest'
+}
+
 // Renders a synthetic session report + share link without launching the game.
 // Everything downstream of SessionData is deliberately Minecraft-free so this works.
 tasks.register('reportPreview', JavaExec) {
