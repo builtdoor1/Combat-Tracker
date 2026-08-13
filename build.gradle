@@ -3,13 +3,21 @@ plugins {
 	id 'maven-publish'
 }
 
-// Jar name carries both the mod version and the Minecraft version,
-// e.g. combat-tracker-1.0.1+1.21.11.jar
-version = "${project.mod_version}+${project.minecraft_version}"
+version = project.mod_version
 group = project.maven_group
 
 base {
 	archivesName = 'combat-tracker'
+}
+
+// The file is named for the Minecraft version it targets, e.g.
+// combat-tracker-1.21.11.jar, because a release publishes one jar per Minecraft
+// version and that is the only thing a person downloading one needs in order to
+// pick the right file. The mod's own version stays in `version` above, so
+// fabric.mod.json — which is what the launcher, Mod Menu and Modrinth actually
+// read for update checks — still reports it correctly.
+tasks.withType(AbstractArchiveTask).configureEach {
+	archiveVersion = project.minecraft_version
 }
 
 repositories {
@@ -92,10 +100,18 @@ dependencies {
 
 processResources {
 	def version = project.version
+	// Pinned exactly, not to a range. A build compiled against one Minecraft version
+	// binds mixins to that version's method signatures, and those move within 1.21.x
+	// — the input handlers changed shape at 1.21.9 and the hotbar slot accessors at
+	// 1.21.5. A jar that loads on a version it was not built for fails at mixin
+	// application, which is a crash on startup rather than a missing feature, so the
+	// dependency has to be as narrow as the build actually is.
+	def mcVersion = project.minecraft_version
 	inputs.property "version", version
+	inputs.property "minecraft_version", mcVersion
 
 	filesMatching("fabric.mod.json") {
-		expand "version": version
+		expand "version": version, "minecraft_version": mcVersion
 	}
 }
 

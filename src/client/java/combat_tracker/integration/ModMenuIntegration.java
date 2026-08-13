@@ -18,7 +18,6 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
-import net.minecraft.util.Util;
 
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -243,10 +242,35 @@ public class ModMenuIntegration implements ModMenuApi {
     private static void openRecordings() {
         try {
             Files.createDirectories(SessionRecorder.dir());
-            Util.getPlatform().openPath(SessionRecorder.dir());
+            openInFileManager(SessionRecorder.dir());
         } catch (Exception ignored) {
             // best-effort; the path is also printed to chat when a recording is saved
         }
+    }
+
+    /**
+     * Opens a folder in the operating system's file manager.
+     *
+     * <p>Spelled out rather than called through {@code Util.getPlatform().openPath},
+     * which moved package between 1.21.10 and 1.21.11 and would otherwise pin this
+     * whole source tree to one Minecraft version for the sake of one button. These
+     * are the same three commands vanilla issues.</p>
+     *
+     * <p>AWT's {@code Desktop.open} would be the obvious alternative and is not one:
+     * initialising AWT alongside GLFW is exactly what Minecraft avoids, because on
+     * macOS the two fight over the main thread.</p>
+     */
+    private static void openInFileManager(java.nio.file.Path dir) throws java.io.IOException {
+        String os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
+        java.util.List<String> cmd;
+        if (os.contains("win")) {
+            cmd = java.util.List.of("rundll32", "url.dll,FileProtocolHandler", dir.toString());
+        } else if (os.contains("mac")) {
+            cmd = java.util.List.of("open", dir.toString());
+        } else {
+            cmd = java.util.List.of("xdg-open", dir.toString());
+        }
+        new ProcessBuilder(cmd).start();
     }
 
     /** Two-click confirmation so a stray click cannot wipe a session's stats. */

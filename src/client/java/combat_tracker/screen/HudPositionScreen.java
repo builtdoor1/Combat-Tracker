@@ -44,9 +44,24 @@ public class HudPositionScreen extends Screen {
         graphics.drawString(this.font, hint, this.width / 2 - this.font.width(hint) / 2, 24, 0xFFFFFFFF);
 
         HudRenderer.renderScaledAt(graphics, config.hudX, config.hudY);
-        graphics.renderOutline(config.hudX - 1, config.hudY - 1,
+        outline(graphics, config.hudX - 1, config.hudY - 1,
                 HudRenderer.scaledWidth() + 2, HudRenderer.scaledHeight() + 2,
                 dragging ? 0xFFFFFF55 : 0xFF55FF55);
+    }
+
+    /**
+     * A one-pixel border, drawn as four fills.
+     *
+     * <p>{@code GuiGraphics.renderOutline} would do this in one call and does not
+     * keep the same signature across 1.21.x, which is a poor reason to pin the
+     * source tree to a single Minecraft version. {@code fill} has been stable
+     * throughout.</p>
+     */
+    private static void outline(GuiGraphics graphics, int x, int y, int w, int h, int color) {
+        graphics.fill(x, y, x + w, y + 1, color);
+        graphics.fill(x, y + h - 1, x + w, y + h, color);
+        graphics.fill(x, y + 1, x + 1, y + h - 1, color);
+        graphics.fill(x + w - 1, y + 1, x + w, y + h - 1, color);
     }
 
     @Override
