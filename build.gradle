@@ -58,6 +58,16 @@ loom {
 	}
 }
 
+// Launch verification: -PmixinDebug makes Mixin log every application, so a run
+// can prove which mixins bound rather than inferring it from the absence of a
+// crash. Off by default; it is noisy.
+if (project.hasProperty('mixinDebug')) {
+	loom.runs.configureEach {
+		vmArg '-Dmixin.debug=true'
+		vmArg '-Dmixin.debug.verbose=true'
+	}
+}
+
 // ── Per-version source variants ──────────────────────────────────────────────
 // The client source targets the newest supported Minecraft. Older ones need
 // genuinely different code in a handful of files — different mixin targets, not
