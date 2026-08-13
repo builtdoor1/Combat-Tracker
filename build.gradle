@@ -77,10 +77,19 @@ if (sourceVariant) {
 		throw new GradleException("No source variant at ${overlay}")
 	}
 	def mergedDir = layout.buildDirectory.dir("variant-src/${sourceVariant}")
+	// A variant can also drop a file outright. Before 1.21.5 there is no
+	// Inventory.setSelectedSlot to inject into, so InventoryMixin cannot bind; it is
+	// already off the mixin config, and leaving the class in the tree only makes the
+	// annotation processor warn about a target it will never find.
+	def dropList = file("versions/${sourceVariant}/exclude.txt")
+	def drops = dropList.exists()
+			? dropList.readLines()*.trim().findAll { it && !it.startsWith('#') }
+			: []
 	def mergeVariant = tasks.register('mergeVariantSource', Sync) {
 		duplicatesStrategy = DuplicatesStrategy.INCLUDE
 		from('src/client/java')
 		from(overlay)
+		drops.each { exclude it }
 		into(mergedDir)
 	}
 	sourceSets.client.java.srcDirs = [mergedDir]
