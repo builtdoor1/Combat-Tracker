@@ -47,6 +47,57 @@ loom {
 	}
 }
 
+// ── Per-version source variants ──────────────────────────────────────────────
+// The client source targets the newest supported Minecraft. Older ones need
+// genuinely different code in a handful of files — different mixin targets, not
+// different constants — so those files get an override under versions/<name>/java
+// and everything else is shared.
+//
+// Implemented as a merge into one directory rather than two source roots, because
+// two roots holding the same class is a duplicate-class error, not an override.
+// Later `from` wins, so the variant file replaces the shared one.
+//
+//     ./gradlew build -PsourceVariant=1.21.8 -Pminecraft_version=1.21.8 ...
+//
+def sourceVariant = project.findProperty('sourceVariant')
+if (sourceVariant) {
+	def overlay = file("versions/${sourceVariant}/java")
+	if (!overlay.isDirectory()) {
+		throw new GradleException("No source variant at ${overlay}")
+	}
+	def mergedDir = layout.buildDirectory.dir("variant-src/${sourceVariant}")
+	def mergeVariant = tasks.register('mergeVariantSource', Sync) {
+		duplicatesStrategy = DuplicatesStrategy.INCLUDE
+		from('src/client/java')
+		from(overlay)
+		into(mergedDir)
+	}
+	sourceSets.client.java.srcDirs = [mergedDir]
+
+	// Resources get the same treatment. The mixin config has to be overridable
+	// because a variant may drop a mixin entirely: restoreToggleStatesOnScreenClosed
+	// only exists from 1.21.9, and an entry naming a class that cannot bind is a
+	// build failure in the remapper, not a warning.
+	def resOverlay = file("versions/${sourceVariant}/resources")
+	if (resOverlay.isDirectory()) {
+		def mergedRes = layout.buildDirectory.dir("variant-res/${sourceVariant}")
+		def mergeVariantRes = tasks.register('mergeVariantResources', Sync) {
+			duplicatesStrategy = DuplicatesStrategy.INCLUDE
+			from('src/client/resources')
+			from(resOverlay)
+			into(mergedRes)
+		}
+		sourceSets.client.resources.srcDirs = [mergedRes]
+		tasks.matching { it.name in ['processClientResources', 'clientSourcesJar', 'sourcesJar'] }
+				.configureEach { dependsOn mergeVariantRes }
+	}
+
+	// Every task that reads the client source tree needs the merge to have run;
+	// Gradle rejects an undeclared dependency on another task's output directory.
+	tasks.matching { it.name in ['compileClientJava', 'clientSourcesJar', 'sourcesJar'] }
+			.configureEach { dependsOn mergeVariant }
+}
+
 // ── Alert endpoint ───────────────────────────────────────────────────────────
 // Baked into the jar at build time from a Gradle property, so the URL never has to
 // live in a tracked file. Set it in ~/.gradle/gradle.properties (outside this repo):
