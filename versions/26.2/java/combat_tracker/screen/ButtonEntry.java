@@ -1,0 +1,95 @@
+package combat_tracker.screen;
+
+import me.shedaniel.clothconfig2.gui.entries.TooltipListEntry;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.events.GuiEventListener;
+import net.minecraft.client.gui.narration.NarratableEntry;
+import net.minecraft.network.chat.Component;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+
+/**
+ * A clickable button as a Cloth Config list entry. Cloth ships entries for values
+ * (toggles, sliders, dropdowns) but none for plain actions, so the action controls
+ * — Move HUD, Reset Stats, recording — use this.
+ *
+ * <p>The press handler receives the button itself so it can relabel in place, which
+ * is how the recording and reset-confirmation entries flip their text.</p>
+ */
+public class ButtonEntry extends TooltipListEntry<Object> {
+    // Wide enough for a recordings row carrying a date and two player names.
+    // It is a min() against the available width, so narrow screens are unaffected.
+    private static final int MAX_WIDTH = 260;
+    private static final int HEIGHT = 20;
+
+    private final Button button;
+
+    public ButtonEntry(Component label, Consumer<Button> onPress) {
+        this(label, null, onPress);
+    }
+
+    public ButtonEntry(Component label, Component tooltip, Consumer<Button> onPress) {
+        super(label, tooltipSupplier(tooltip));
+        this.button = Button.builder(label, b -> onPress.accept(b))
+                .bounds(0, 0, MAX_WIDTH, HEIGHT)
+                .build();
+    }
+
+    private static Supplier<Optional<Component[]>> tooltipSupplier(Component tooltip) {
+        Optional<Component[]> value = tooltip == null
+                ? Optional.empty()
+                : Optional.of(new Component[]{tooltip});
+        return () -> value;
+    }
+
+    // 26.x renders in two phases: widgets contribute to a render state that is
+    // drawn later, so Renderable.render became extractRenderState and Cloth's entry
+    // followed it. Same arguments, same order, different name and graphics type.
+    @Override
+    public void extractRenderState(GuiGraphicsExtractor graphics, int index, int y, int x,
+                                   int entryWidth, int entryHeight,
+                                   int mouseX, int mouseY, boolean isHovered, float delta) {
+        super.extractRenderState(graphics, index, y, x, entryWidth, entryHeight,
+                mouseX, mouseY, isHovered, delta);
+        int width = Math.min(entryWidth, MAX_WIDTH);
+        button.setX(x + (entryWidth - width) / 2);
+        button.setY(y);
+        button.setWidth(width);
+        button.active = isEditable();
+        button.extractRenderState(graphics, mouseX, mouseY, delta);
+    }
+
+    @Override
+    public int getItemHeight() {
+        return HEIGHT + 4;
+    }
+
+    /** Buttons carry no config value, so there is nothing to save or reset. */
+    @Override
+    public Object getValue() {
+        return null;
+    }
+
+    @Override
+    public Optional<Object> getDefaultValue() {
+        return Optional.empty();
+    }
+
+    @Override
+    public void save() {
+    }
+
+    @Override
+    public List<? extends GuiEventListener> children() {
+        return List.of(button);
+    }
+
+    @Override
+    public List<? extends NarratableEntry> narratables() {
+        return List.of(button);
+    }
+}

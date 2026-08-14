@@ -199,8 +199,14 @@ processResources {
 	inputs.property "version", version
 	inputs.property "minecraft_version", mcVersion
 
+	// The Java floor follows the target too: 26.x is compiled for 25, and a jar
+	// claiming it runs on 21 would be let in by the loader and then fail on a class
+	// version it cannot read.
+	def javaFloor = javaRelease
+	inputs.property "java_release", javaFloor
+
 	filesMatching("fabric.mod.json") {
-		expand "version": version, "minecraft_version": mcVersion
+		expand "version": version, "minecraft_version": mcVersion, "java_release": javaFloor
 	}
 }
 
