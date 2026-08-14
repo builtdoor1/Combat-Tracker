@@ -60,8 +60,18 @@ export class AlertAggregator {
       hotbar INTEGER NOT NULL DEFAULT 0,
       \`use\` INTEGER NOT NULL DEFAULT 0,
       attack INTEGER NOT NULL DEFAULT 0,
-      keybind INTEGER NOT NULL DEFAULT 0
+      keybind INTEGER NOT NULL DEFAULT 0,
+      mc TEXT
     )`);
+    // Added after the table already existed in production, so CREATE TABLE IF NOT
+    // EXISTS would not have introduced it. ALTER is the only way in, and it throws
+    // rather than no-ops when the column is already there, so the throw is the
+    // check — there is no ADD COLUMN IF NOT EXISTS in SQLite.
+    try {
+      this.sql.exec('ALTER TABLE flags ADD COLUMN mc TEXT');
+    } catch (e) {
+      // Already present. Nothing to do and nothing worth logging.
+    }
     this.sql.exec('CREATE INDEX IF NOT EXISTS flags_uuid ON flags(uuid)');
     this.sql.exec('CREATE INDEX IF NOT EXISTS flags_name ON flags(player_lc)');
   }
@@ -124,12 +134,13 @@ export class AlertAggregator {
     const uuid = String(m.uuid || fallbackUuid || '').slice(0, 64);
     try {
       this.sql.exec(
-          'INSERT INTO flags (ts, uuid, player, player_lc, server, opponent, hotbar, `use`, attack, keybind)'
-          + ' VALUES (?,?,?,?,?,?,?,?,?,?)',
+          'INSERT INTO flags (ts, uuid, player, player_lc, server, opponent, hotbar, `use`, attack, keybind, mc)'
+          + ' VALUES (?,?,?,?,?,?,?,?,?,?,?)',
           Date.now(), uuid, player, player.toLowerCase(),
           String(m.server || '').slice(0, 120), String(m.opponent || '').slice(0, 80),
           num(m.hotbar ?? c.hotbar), num(m.use ?? c.use),
-          num(m.attack ?? c.attack), num(m.keybind ?? c.keybind));
+          num(m.attack ?? c.attack), num(m.keybind ?? c.keybind),
+          String(m.mc || '').slice(0, 24));
       // Pruned opportunistically rather than on a timer: it is one cheap delete on
       // an indexed column and saves owning another alarm.
       this.sql.exec('DELETE FROM flags WHERE ts < ?', Date.now() - RETAIN_MS);
@@ -158,17 +169,19 @@ export class AlertAggregator {
       return { rows: [] };
     }
     const totals = { hotbar: 0, use: 0, attack: 0, keybind: 0 };
-    const servers = new Set(); const opponents = new Set();
+    const servers = new Set(); const opponents = new Set(); const versions = new Set();
     let firstSeen = Infinity; let lastSeen = 0;
     for (const r of rows) {
       totals.hotbar += r.hotbar; totals.use += r.use;
       totals.attack += r.attack; totals.keybind += r.keybind;
       if (r.server) servers.add(r.server);
       if (r.opponent) opponents.add(r.opponent);
+      if (r.mc) versions.add(r.mc);
       firstSeen = Math.min(firstSeen, r.ts);
       lastSeen = Math.max(lastSeen, r.ts);
     }
-    return { rows, totals, firstSeen, lastSeen, servers: [...servers], opponents: [...opponents] };
+    return { rows, totals, firstSeen, lastSeen, servers: [...servers],
+      opponents: [...opponents], versions: [...versions] };
   }
 
   /** Window closed: send one summary for everything that overflowed. */

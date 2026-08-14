@@ -38,9 +38,13 @@ public final class WebhookPayload {
      * @param whenIso ISO-8601 instant; Discord renders it in each reader's own
      *                timezone, which beats printing one timezone at everyone
      * @param opponent who they were fighting, or null if not recently in a fight
+     * @param mcVersion the Minecraft version the flag happened on. The mod runs on
+     *                  seven of them and they do not all detect the same things —
+     *                  hotbar attribution is impossible before 1.21.5 — so a flag
+     *                  without its version cannot be read correctly.
      */
-    public static String build(String player, String uuid, String server, String whenIso,
-                               int hotbar, int use, int attack, int keybind,
+    public static String build(String player, String uuid, String server, String mcVersion,
+                               String whenIso, int hotbar, int use, int attack, int keybind,
                                boolean recording, String shareLink, String opponent) {
         String safePlayer = safe(player);
         String safeUuid = safe(uuid);
@@ -73,6 +77,8 @@ public final class WebhookPayload {
         f.append(",\"fields\":[");
         f.append(field("Player", "`" + safePlayer + "`\n`" + safeUuid + "`", false));
         f.append(",").append(field("Server", "`" + safe(server) + "`", true));
+        f.append(",").append(field("Minecraft",
+                mcVersion == null || mcVersion.isBlank() ? "_unknown_" : "`" + safe(mcVersion) + "`", true));
         f.append(",").append(field("Fighting",
                 opponent == null || opponent.isBlank() ? "_no recent opponent_" : "`" + safe(opponent) + "`", true));
         f.append(",").append(field("What tripped", fields.toString().trim(), false));
@@ -92,6 +98,7 @@ public final class WebhookPayload {
         f.append("\"player\":").append(jsonString(safePlayer));
         f.append(",\"uuid\":").append(jsonString(safeUuid));
         f.append(",\"server\":").append(jsonString(safe(server)));
+        f.append(",\"mc\":").append(jsonString(mcVersion == null ? "" : safe(mcVersion)));
         f.append(",\"opponent\":").append(jsonString(opponent == null ? "" : safe(opponent)));
         f.append(",\"hotbar\":").append(Math.max(0, hotbar));
         f.append(",\"use\":").append(Math.max(0, use));

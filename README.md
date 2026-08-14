@@ -2,19 +2,19 @@
 
 Shows what your fights actually looked like.
 
-A client-side [Fabric](https://fabricmc.net/) mod for **Minecraft 1.21.11** that measures how you fight and turns it into a report you can show people. By *builtdoor*.
+A client-side [Fabric](https://fabricmc.net/) mod for **Minecraft 1.21.1 through 26.2** that measures how you fight and turns it into a report you can show people. By *builtdoor*.
 
 Got accused of reach, killaura, autoclicker or auto jump-reset? Hit record, play a few fights, and you get charts of your own timing and aim, plus a link you can paste in Discord.
 
 It never touches your gameplay. It cannot help you aim, reach further, click faster or reset better. It only watches and writes down what already happened.
 
-> **This mod reports to its author.** When an action happens that no keyboard, mouse or server input asked for, it sends your Minecraft name and UUID, the server address, the UTC time, and how many checks tripped. Nothing else. There is no setting to turn it off — the only person who would is the one it would be reporting on. If you would rather not be reported on, don't install it.
+> **This mod reports to its author.** When an action happens that no keyboard, mouse or server input asked for, it sends your Minecraft name and UUID, the server address, the Minecraft version, the UTC time, and how many checks tripped. Nothing else. There is no setting to turn it off — the only person who would is the one it would be reporting on. If you would rather not be reported on, don't install it.
 
 ---
 
 ## Contents
 
-- [What it measures](#what-it-measures) · [Install](#install) · [Using it](#using-it)
+- [What it measures](#what-it-measures) · [Supported versions](#supported-versions) · [Install](#install) · [Using it](#using-it)
 - [Recording a fight](#recording-a-fight) · [Reading your report](#reading-your-report) · [Sharing a fight](#sharing-a-fight)
 - [What this can and can't show](#what-this-can-and-cant-show) · [Settings](#settings) · [Files](#files)
 - [How it works under the hood](#how-it-works-under-the-hood) · [Building from source](#building-from-source) · [Credits](#credits)
@@ -34,15 +34,48 @@ Four accusations, four answers. In every case the tell is inconsistency: humans 
 
 ---
 
+## Supported versions
+
+One download per Minecraft version. The file is named for the version it is for, so
+match the number to your game — `combat-tracker-1.21.11.jar` is the 1.21.11 build.
+
+| Minecraft | File | Java | Everything works? |
+|---|---|---|---|
+| 26.2 | `combat-tracker-26.2.jar` | **25** | Yes |
+| 1.21.11 | `combat-tracker-1.21.11.jar` | 21 | Yes |
+| 1.21.10 | `combat-tracker-1.21.10.jar` | 21 | Yes |
+| 1.21.9 | `combat-tracker-1.21.9.jar` | 21 | Yes |
+| 1.21.8 | `combat-tracker-1.21.8.jar` | 21 | Yes |
+| 1.21.4 | `combat-tracker-1.21.4.jar` | 21 | All but hotbar detection |
+| 1.21.1 | `combat-tracker-1.21.1.jar` | 21 | All but hotbar detection |
+
+Each build declares the one version it is for, so the loader will refuse the wrong
+file rather than start and break in a confusing way. **26.2 needs Java 25**, because
+Minecraft itself does.
+
+**Why hotbar detection is missing on 1.21.1 and 1.21.4.** From 1.21.5 Minecraft
+changes your selected slot through a method the mod can watch, which is how it tells
+an ordinary switch from a scripted one. Before that the slot is just a number the
+game writes directly, with nothing to watch. All that would be left is noticing the
+number changed, which cannot tell your scroll wheel from a macro, so it is switched
+off rather than left to report everything. Nothing else differs, and none of what the
+mod *measures* — jump resets, combo timing, reach, aim — is affected.
+
+Versions not listed are not supported. Minecraft changed how input and rendering work
+several times across this range, and each build is compiled against the version it
+names.
+
+---
+
 ## Install
 
-1. Install [Fabric Loader](https://fabricmc.net/use/installer/) (0.19.3 or newer) for Minecraft 1.21.11.
+1. Install [Fabric Loader](https://fabricmc.net/use/installer/) (0.19.3 or newer) for your Minecraft version.
 2. Download these and drop them all into your `.minecraft/mods` folder:
 
    | File | Where | Needed? |
    |---|---|---|
-   | `combat-tracker-<version>+1.21.11.jar` | [Latest release](../../releases/latest) | Yes |
-   | Fabric API | [Modrinth](https://modrinth.com/mod/fabric-api) (`0.141.4+1.21.11`) | Yes |
+   | `combat-tracker-<your minecraft version>.jar` | [Latest release](../../releases/latest) | Yes |
+   | Fabric API | [Modrinth](https://modrinth.com/mod/fabric-api) | Yes, matching your version |
    | Cloth Config | [Modrinth](https://modrinth.com/mod/cloth-config) | Yes, builds the settings screen |
    | Mod Menu | [Modrinth](https://modrinth.com/mod/modmenu) | Optional, adds the button that opens settings |
 
@@ -269,17 +302,39 @@ Anything it cannot check is refused rather than downgraded — a missing integri
 ./gradlew build
 ```
 
-Output: `build/libs/combat-tracker-<modversion>+<mcversion>.jar`. Requires **JDK 21**.
-
-Everything downstream of a recorded session (statistics, charts, link encoding) is free of any Minecraft import, so the whole report pipeline can be exercised without launching the game:
+That builds for the version named in `gradle.properties`. To build for a different
+one, pass its properties — and, for the versions that need different code, its source
+variant:
 
 ```bash
-./gradlew reportPreview
+./gradlew build -PsourceVariant=1.21.8 -Pminecraft_version=1.21.8 -Pfabric_api_version=0.136.1+1.21.8 -Pcloth_config_version=19.0.147 -Pmodmenu_version=15.0.2
 ```
 
-That renders synthetic sessions to `build/preview/` as HTML reports plus a link fragment, and prints how link length and plotted-point count behave as sessions grow.
+Most of the source is shared. Where a version genuinely needs different code — a
+different mixin target, not a different constant — the file is overridden under
+`versions/<version>/java`, and `versions/<version>/exclude.txt` can drop one
+outright. Variants exist for 1.21.1, 1.21.4, 1.21.8 and 26.2; 1.21.9 through 1.21.11
+build from the shared source with no variant.
 
----
+Two checks worth running:
+
+```bash
+./gradlew provenanceSelfTest
+```
+
+Drives the detection logic headlessly — software switches reported, legitimate input
+ignored, alert scheduling — in seconds, without launching the game.
+
+```bash
+./gradlew runClient -PmixinDebug
+```
+
+Launches the game and writes every patched class to `run/.mixin.out`, so you can
+confirm which hooks actually attached rather than inferring it from the absence of a
+crash. Useful after porting to a new version.
+
+Reporting is off unless an endpoint is baked in, so a build from a fresh clone sends
+nothing. See `combatTrackerAlertEndpoint` in `build.gradle`.
 
 ## Credits
 

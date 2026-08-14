@@ -78,6 +78,12 @@ if (project.hasProperty('mixinDebug')) {
 // two roots holding the same class is a duplicate-class error, not an override.
 // Later `from` wins, so the variant file replaces the shared one.
 //
+// The cost of that: an override is a copy, and a copy goes stale when the shared
+// file changes underneath it. Nothing detects this at edit time — the variant build
+// simply fails, which is why every supported version is built before a release
+// rather than only the default one. Keep overrides as small as the difference
+// demands, so there is less of them to go stale.
+//
 //     ./gradlew build -PsourceVariant=1.21.8 -Pminecraft_version=1.21.8 ...
 //
 def sourceVariant = project.findProperty('sourceVariant')

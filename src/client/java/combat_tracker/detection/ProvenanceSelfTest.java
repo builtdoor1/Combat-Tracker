@@ -32,6 +32,7 @@ public final class ProvenanceSelfTest {
         swapAndRevertInOneTickIsCaught();
         spentBudgetStillReportsSomethingNew();
         spentBudgetStaysQuietForRepeats();
+        alertCarriesTheMinecraftVersion();
 
         System.out.println(checks + " checks, " + failures + " failed");
         if (failures > 0) {
@@ -112,6 +113,22 @@ public final class ProvenanceSelfTest {
                 false, AlertSchedule.due(spent, 0L, Long.MAX_VALUE / 4, false));
         expect("even something new waits out the opening delay",
                 false, AlertSchedule.due(spent, 0L, AlertSchedule.FIRST_DELAY_MS - 1, true));
+    }
+
+    /**
+     * The version has to reach both halves of the alert.
+     *
+     * <p>The embed is what a person reads and the meta block is what the relay files
+     * for {@code /search}. They are built separately, so one can carry the version
+     * while the other quietly does not — and a flag whose version is unknown cannot
+     * be read correctly, because the checks are not the same on every version.</p>
+     */
+    private static void alertCarriesTheMinecraftVersion() {
+        String json = WebhookPayload.build("Notch", "uuid-1", "example.net", "1.21.11",
+                "2026-01-01T00:00:00Z", 3, 0, 0, 0, false, null, null);
+        expect("the embed names the Minecraft version", true, json.contains("\"Minecraft\""));
+        expect("the embed shows the version itself", true, json.contains("1.21.11"));
+        expect("the relay meta carries the version", true, json.contains("\"mc\":\"1.21.11\""));
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────

@@ -126,7 +126,7 @@ export async function handleInteraction(body, lookup) {
 }
 
 function summaryEmbed(query, found) {
-  const { rows, totals, firstSeen, lastSeen, servers, opponents } = found;
+  const { rows, totals, firstSeen, lastSeen, servers, opponents, versions } = found;
 
   const lines = [];
   if (totals.hotbar) lines.push(`**Hotbar switched** × ${totals.hotbar}`);
@@ -142,6 +142,13 @@ function summaryEmbed(query, found) {
   ];
   if (servers.length) {
     fields.push({ name: 'Servers', value: servers.slice(0, 5).map(s => `\`${clean(s)}\``).join('\n'), inline: true });
+  }
+  if (versions && versions.length) {
+    // Worth showing: the checks are not identical across versions — hotbar
+    // attribution does not exist before 1.21.5 — so the same flag count means
+    // different things depending on where it came from.
+    fields.push({ name: 'Minecraft', value: versions.slice(0, 5).map(s => `\`${clean(s)}\``).join('
+'), inline: true });
   }
   if (opponents.length) {
     fields.push({ name: 'Fought', value: opponents.slice(0, 5).map(s => `\`${clean(s)}\``).join('\n'), inline: true });

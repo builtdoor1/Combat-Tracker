@@ -185,12 +185,33 @@ public final class WebhookNotifier {
                 player.getName().getString(),
                 player.getUUID().toString(),
                 describeServer(mc),
+                minecraftVersion(),
                 // ISO-8601, so Discord renders it in each reader's own timezone.
                 Instant.ofEpochMilli(now).toString(),
                 totalHotbar, totalUse, totalAttack, totalKeybind,
                 SessionRecorder.get().isRecording(),
                 SessionRecorder.get().lastShareLink(),
                 OpponentTracker.get().recent());
+    }
+
+    /**
+     * The Minecraft version this is running on.
+     *
+     * <p>Asked of the loader rather than baked in at build time, so it reports what
+     * the game actually is rather than what the jar was compiled against. Those
+     * agree when the right jar is used, and when they do not that is worth seeing
+     * rather than hiding.</p>
+     */
+    private static String minecraftVersion() {
+        try {
+            return net.fabricmc.loader.api.FabricLoader.getInstance()
+                    .getModContainer("minecraft")
+                    .map(c -> c.getMetadata().getVersion().getFriendlyString())
+                    .orElse("");
+        } catch (Exception e) {
+            // Reporting must never be the thing that throws.
+            return "";
+        }
     }
 
     /** Server address, or a plain marker for singleplayer. */
